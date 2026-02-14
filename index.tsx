@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo, createContext, useContext, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
@@ -24,11 +23,13 @@ import {
   Search,
   Download,
   Video,
-  Image as ImageIcon,
+  ImageIcon,
   Key,
   Globe,
-  /* Added missing Sparkles icon */
-  Sparkles
+  Sparkles,
+  FileText,
+  CreditCard,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
@@ -61,6 +62,11 @@ const ANIMATIONS = {
     initial: { x: "100%" },
     animate: { x: 0, transition: { duration: 0.5, ease: EASE_PREMIUM } },
     exit: { x: "100%", transition: { duration: 0.4, ease: EASE_PREMIUM } }
+  },
+  FULLSCREEN_MENU: {
+    initial: { opacity: 0, y: -20 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_PREMIUM } },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.3, ease: EASE_PREMIUM } }
   },
   POPUP: {
      initial: { opacity: 0, scale: 0.9, y: 20, filter: "blur(4px)" },
@@ -316,257 +322,6 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-// --- Generative Studio Component ---
-
-const MediaStudio = () => {
-  const [tab, setTab] = useState<'image' | 'video'>('image');
-  const [prompt, setPrompt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('1080p');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: 'image' | 'video', url: string } | null>(null);
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("");
-
-  const videoMessages = [
-    "Sculpting cinematic motions...",
-    "Defining geometric precision...",
-    "Optimizing visual depth...",
-    "Polishing aesthetic transitions...",
-    "Rendering your artistic vision..."
-  ];
-
-  useEffect(() => {
-    const checkKey = async () => {
-      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-      setHasApiKey(hasKey);
-    };
-    checkKey();
-  }, []);
-
-  const selectKey = async () => {
-    await (window as any).aistudio.openSelectKey();
-    setHasApiKey(true);
-  };
-
-  const handleGenerate = async () => {
-    if (!hasApiKey) {
-      alert("Please select an API key first.");
-      return;
-    }
-    setLoading(true);
-    setResult(null);
-
-    let messageInterval: any;
-    if (tab === 'video') {
-      let msgIdx = 0;
-      setLoadingMessage(videoMessages[0]);
-      messageInterval = setInterval(() => {
-        msgIdx = (msgIdx + 1) % videoMessages.length;
-        setLoadingMessage(videoMessages[msgIdx]);
-      }, 5000);
-    }
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      if (tab === 'image') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
-          contents: { parts: [{ text: prompt }] },
-          config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: "1K" } }
-        });
-        const part = response.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-          setResult({ type: 'image', url: `data:image/png;base64,${part.inlineData.data}` });
-        }
-      } else {
-        let operation = await ai.models.generateVideos({
-          model: 'veo-3.1-fast-generate-preview',
-          prompt: prompt,
-          config: {
-            numberOfVideos: 1,
-            resolution: resolution as any,
-            aspectRatio: aspectRatio as any
-          }
-        });
-        while (!operation.done) {
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          operation = await ai.operations.getVideosOperation({ operation: operation });
-        }
-        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-        if (downloadLink) {
-          const videoUrl = `${downloadLink}&key=${process.env.API_KEY}`;
-          setResult({ type: 'video', url: videoUrl });
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Generation failed. Check your API key or connection.");
-    } finally {
-      setLoading(false);
-      if (messageInterval) clearInterval(messageInterval);
-    }
-  };
-
-  const downloadMedia = async () => {
-    if (!result) return;
-    const link = document.createElement('a');
-    link.href = result.url;
-    link.download = `generated-${result.type}-${Date.now()}.${result.type === 'image' ? 'png' : 'mp4'}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  return (
-    <section id="studio" className="py-32 bg-white dark:bg-[#0B1121] overflow-hidden">
-      <div className="container mx-auto px-6">
-        <SectionTitle subtitle="Experience the future of aesthetic planning with Gemini-powered generative tools.">
-          Generative Studio
-        </SectionTitle>
-
-        <div className="max-w-4xl mx-auto bg-slate-50 dark:bg-navy-900/50 p-8 md:p-12 rounded-3xl border border-[#CFB997]/10 shadow-2xl relative">
-          
-          {/* API Key Banner */}
-          {!hasApiKey && (
-            <div className="mb-8 p-4 bg-[#CFB997]/10 border border-[#CFB997]/30 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Key className="w-5 h-5 text-[#CFB997]" />
-                <span className="text-sm font-medium dark:text-slate-200">An API Key from a paid GCP project is required for high-quality generation.</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-xs underline opacity-60 dark:text-white/60">Billing Docs</a>
-                <GoldButton onClick={selectKey} className="px-4 py-2 text-[10px]">Select Key</GoldButton>
-              </div>
-            </div>
-          )}
-
-          {/* Tabs */}
-          <div className="flex gap-4 mb-10 border-b border-[#CFB997]/10 pb-4">
-            <button 
-              onClick={() => setTab('image')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full text-xs uppercase tracking-widest font-bold transition-all ${tab === 'image' ? 'bg-[#CFB997] text-white shadow-lg' : 'hover:bg-slate-200 dark:hover:bg-navy-800 dark:text-slate-400'}`}
-            >
-              <ImageIcon className="w-4 h-4" /> Images
-            </button>
-            <button 
-              onClick={() => setTab('video')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full text-xs uppercase tracking-widest font-bold transition-all ${tab === 'video' ? 'bg-[#CFB997] text-white shadow-lg' : 'hover:bg-slate-200 dark:hover:bg-navy-800 dark:text-slate-400'}`}
-            >
-              <Video className="w-4 h-4" /> Video
-            </button>
-          </div>
-
-          {/* Inputs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-            <div className="md:col-span-2">
-              <label className="block text-[10px] uppercase tracking-widest font-bold mb-3 opacity-50 dark:text-white/50">Vision Prompt</label>
-              <textarea 
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={tab === 'image' ? "A hyper-realistic cinematic portrait of a person with glowing skin..." : "A slow-motion cinematic drone sweep of a medical spa in the mountains..."}
-                className="w-full bg-white dark:bg-navy-900 border border-[#CFB997]/20 rounded-2xl p-5 outline-none focus:border-[#CFB997] transition-all h-32 text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold mb-3 opacity-50 dark:text-white/50">Aspect Ratio</label>
-              <select 
-                value={aspectRatio}
-                onChange={(e) => setAspectRatio(e.target.value)}
-                className="w-full bg-white dark:bg-navy-900 border border-[#CFB997]/20 rounded-2xl px-5 py-4 outline-none focus:border-[#CFB997] transition-all text-sm appearance-none dark:text-white"
-              >
-                <option value="1:1">1:1 Square</option>
-                <option value="16:9">16:9 Cinematic</option>
-                <option value="9:16">9:16 Portrait</option>
-              </select>
-            </div>
-            {tab === 'video' && (
-              <div>
-                <label className="block text-[10px] uppercase tracking-widest font-bold mb-3 opacity-50 dark:text-white/50">Resolution</label>
-                <select 
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
-                  className="w-full bg-white dark:bg-navy-900 border border-[#CFB997]/20 rounded-2xl px-5 py-4 outline-none focus:border-[#CFB997] transition-all text-sm appearance-none dark:text-white"
-                >
-                  <option value="720p">720p HD</option>
-                  <option value="1080p">1080p Full HD</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          <GoldButton 
-            onClick={handleGenerate} 
-            disabled={loading || !prompt} 
-            className="w-full py-6 flex items-center justify-center gap-3"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            {loading ? (tab === 'video' ? 'Processing Video...' : 'Capturing Image...') : 'Initialize Generation'}
-          </GoldButton>
-
-          {/* Results Area */}
-          <AnimatePresence>
-            {loading && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="mt-12 p-20 flex flex-col items-center justify-center border-2 border-dashed border-[#CFB997]/20 rounded-3xl"
-              >
-                <div className="relative w-20 h-20 mb-8">
-                  <motion.div 
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-                    className="absolute inset-0 border-4 border-t-[#CFB997] border-r-transparent border-b-transparent border-l-transparent rounded-full"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-[#CFB997]" />
-                  </div>
-                </div>
-                <p className="text-xl serif-font italic opacity-60 text-center dark:text-white/60">{loadingMessage || "Developing your vision..."}</p>
-                {tab === 'video' && <p className="mt-4 text-[10px] uppercase tracking-widest opacity-40 dark:text-white/40">This can take up to 2-3 minutes. Please stay with us.</p>}
-              </motion.div>
-            )}
-
-            {result && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                className="mt-12 space-y-6"
-              >
-                <div className="relative group rounded-3xl overflow-hidden shadow-2xl border border-[#CFB997]/20">
-                  {result.type === 'image' ? (
-                    <img src={result.url} className="w-full h-auto" alt="Generated" />
-                  ) : (
-                    <video src={result.url} className="w-full h-auto" controls autoPlay loop muted />
-                  )}
-                  <div className="absolute top-6 right-6 flex gap-3">
-                    <button 
-                      onClick={downloadMedia}
-                      className="p-4 bg-white/20 backdrop-blur-xl rounded-full text-white hover:bg-white hover:text-navy-900 transition-all shadow-xl"
-                    >
-                      <Download className="w-6 h-6" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center bg-[#CFB997]/5 p-6 rounded-2xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#CFB997] flex items-center justify-center text-white">
-                      {result.type === 'image' ? <ImageIcon className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold uppercase tracking-widest dark:text-white">Masterpiece Ready</h4>
-                      <p className="text-xs opacity-50 dark:text-white/50">{tab === 'image' ? '1K Resolution PNG' : `${resolution} Cinema MP4`}</p>
-                    </div>
-                  </div>
-                  <GoldButton onClick={() => setResult(null)} variant="outline" className="px-6 py-2 text-[10px]">Generate Another</GoldButton>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </section>
-  );
-};
-
 // --- Custom Components ---
 
 const Preloader = () => (
@@ -702,9 +457,9 @@ const Header = () => {
       <div className="container mx-auto px-6 flex justify-between items-center">
         <img src={logoSrc} alt="Dr. Mironova" className="h-10 md:h-12 w-auto cursor-pointer object-contain" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})} />
         <nav className="hidden lg:flex items-center gap-10">
-          {['operations', 'portfolio', 'price', 'about', 'studio', 'contacts'].map(id => (
+          {['operations', 'portfolio', 'price', 'about', 'contacts'].map(id => (
             <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })} className="text-[10px] uppercase tracking-[0.25em] hover:text-[#CFB997] transition-colors dark:text-white font-semibold">
-              {id === 'studio' ? 'Studio' : t.nav[id as keyof typeof t.nav]}
+              {t.nav[id as keyof typeof t.nav]}
             </button>
           ))}
         </nav>
@@ -728,35 +483,43 @@ const MobileNav = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          <motion.div {...ANIMATIONS.OVERLAY} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150]" onClick={onClose} />
-          <motion.div {...ANIMATIONS.SIDEBAR} className="fixed top-0 right-0 h-full w-[80vw] max-sm:w-[85vw] bg-white dark:bg-[#0B1121] z-[151] p-8 flex flex-col shadow-2xl">
-            <div className="flex justify-between items-center mb-12">
-              <span className="text-xl serif-font italic gold-text">Dr. Mironova</span>
-              <button onClick={onClose} className="dark:text-white"><X className="w-8 h-8" /></button>
-            </div>
-            <nav className="flex flex-col gap-6 flex-1 text-2xl serif-font">
-                {['operations', 'portfolio', 'price', 'about', 'studio', 'contacts'].map(id => (
-                  <button key={id} onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); onClose(); }} className="text-left dark:text-white font-light hover:text-[#CFB997] transition-colors">
-                    {id === 'studio' ? 'Studio' : t.nav[id as keyof typeof t.nav]}
-                  </button>
-                ))}
+        <motion.div 
+          {...ANIMATIONS.FULLSCREEN_MENU}
+          className="fixed inset-0 z-[150] bg-white/80 dark:bg-[#0B1121]/90 backdrop-blur-2xl flex flex-col"
+        >
+          <div className="container mx-auto px-6 py-8 flex justify-between items-center border-b dark:border-white/5">
+            <span className="text-xl serif-font italic gold-text">Dr. Mironova</span>
+            <button onClick={onClose} className="p-2 dark:text-white"><X className="w-10 h-10" /></button>
+          </div>
+          <div className="flex-1 flex flex-col justify-center items-center gap-8 md:gap-12 p-8">
+            <nav className="flex flex-col items-center gap-6 md:gap-8 text-4xl md:text-6xl serif-font italic">
+              {['operations', 'portfolio', 'price', 'about', 'contacts'].map((id, idx) => (
+                <motion.button 
+                  key={id} 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: idx * 0.1 } }}
+                  onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); onClose(); }} 
+                  className="dark:text-white hover:text-[#CFB997] transition-all"
+                >
+                  {t.nav[id as keyof typeof t.nav]}
+                </motion.button>
+              ))}
             </nav>
-            <div className="pt-8 border-t dark:border-white/10 flex flex-col gap-6">
-                <div className="flex justify-between items-center">
-                  <button onClick={() => { toggleTheme(); }} className="flex items-center gap-3 text-sm uppercase tracking-widest font-bold dark:text-white">
-                    {theme === 'light' ? <><Moon className="w-4 h-4" /> Dark Mode</> : <><Sun className="w-4 h-4" /> Light Mode</>}
-                  </button>
-                  <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 dark:text-white">
-                    <Globe className="w-4 h-4" /> {language.toUpperCase()}
-                  </button>
-                </div>
-                <GoldButton onClick={() => { onClose(); document.getElementById('contacts')?.scrollIntoView({ behavior: 'smooth' }); }} className="w-full">
-                  {t.nav.book}
-                </GoldButton>
-            </div>
-          </motion.div>
-        </>
+          </div>
+          <div className="p-12 flex flex-col items-center gap-8 border-t dark:border-white/5">
+              <div className="flex gap-12 items-center">
+                <button onClick={toggleTheme} className="flex items-center gap-3 text-xs uppercase tracking-widest font-bold dark:text-white">
+                  {theme === 'light' ? <><Moon className="w-5 h-5" /> Dark Mode</> : <><Sun className="w-5 h-5" /> Light Mode</>}
+                </button>
+                <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 dark:text-white">
+                  <Globe className="w-5 h-5" /> {language.toUpperCase()}
+                </button>
+              </div>
+              <GoldButton onClick={() => { onClose(); document.getElementById('contacts')?.scrollIntoView({ behavior: 'smooth' }); }} className="w-full max-w-sm py-6">
+                {t.nav.book}
+              </GoldButton>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -787,6 +550,59 @@ const FullPriceModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => v
                             {filteredPrices.map((cat, idx) => (
                                 <div key={idx}><h3 className="text-xl serif-font italic text-[#CFB997] mb-6 border-b dark:border-white/5 pb-2">{cat.category}</h3><div className="space-y-3">{cat.items.map((item, i) => (<div key={i} className="flex justify-between items-end gap-4 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"><div className="flex flex-col"><span className="text-sm font-medium dark:text-white">{item.name}</span>{item.note && <span className="text-[10px] uppercase tracking-widest opacity-40 dark:text-white/40">{item.note}</span>}</div><span className="text-sm font-bold text-[#CFB997] whitespace-nowrap">{item.price}</span></div>))}</div></div>
                             ))}
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+    );
+};
+
+const DoctorDetailsModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+    const { t } = useLanguage();
+    const accordionItems = getDoctorAccordionItems(t);
+    const [openIdx, setOpenIdx] = useState<number>(0);
+    const { openBooking } = useBooking();
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8">
+                    <motion.div {...ANIMATIONS.OVERLAY} className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onClose} />
+                    <motion.div {...ANIMATIONS.MODAL} className="bg-white dark:bg-[#0B1121] w-full max-w-6xl h-full md:h-[90vh] rounded-2xl relative overflow-hidden flex flex-col shadow-2xl">
+                        <button onClick={onClose} className="absolute top-6 right-6 z-50 text-slate-400 hover:text-black dark:hover:text-white"><X className="w-8 h-8" /></button>
+                        <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
+                            <div className="w-full lg:w-[45%] h-[50vh] lg:h-auto relative">
+                                <LazyImage src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-9.jpg" alt="Doctor Mironova" className="w-full h-full" imgClassName="object-top" eager={true} />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-12 text-white">
+                                    <span className="text-[10px] uppercase tracking-[0.4em] text-[#CFB997] mb-4 block font-bold">{t.doctor.tag}</span>
+                                    <h2 className="text-5xl serif-font italic mb-4">{t.doctor.name}</h2>
+                                    <p className="text-xs uppercase tracking-widest opacity-80 leading-relaxed max-w-xs">{t.doctor.title}</p>
+                                </div>
+                            </div>
+                            <div className="w-full lg:w-[55%] p-8 md:p-16 lg:p-24 space-y-12">
+                                <div className="space-y-4">
+                                    {accordionItems.map((item, idx) => (
+                                        <div key={idx} className="border-b dark:border-white/10 pb-4">
+                                            <button onClick={() => setOpenIdx(openIdx === idx ? -1 : idx)} className="w-full flex justify-between items-center text-left py-4 group">
+                                                <span className={`text-sm uppercase tracking-widest font-bold transition-colors ${openIdx === idx ? 'text-[#CFB997]' : 'hover:text-[#CFB997] dark:text-white'}`}>{item.title}</span>
+                                                {openIdx === idx ? <Minus className="w-4 h-4 text-[#CFB997]" /> : <Plus className="w-4 h-4 opacity-30 dark:text-white/30" />}
+                                            </button>
+                                            <AnimatePresence>{openIdx === idx && (
+                                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                                                    <div className="pb-4 text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-light">
+                                                        {item.content}
+                                                    </div>
+                                                </motion.div>
+                                            )}</AnimatePresence>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="p-8 bg-[#CFB997]/5 border-l-2 border-[#CFB997] space-y-6">
+                                    <p className="text-lg italic font-serif opacity-80 dark:text-white/80 leading-relaxed">"{t.doctor.quote}"</p>
+                                    <GoldButton onClick={() => { onClose(); openBooking(); }} className="w-full">{t.doctor.cta}</GoldButton>
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 </div>
@@ -936,10 +752,28 @@ const AboutSection = () => {
     const { t, language } = useLanguage();
     const { openBooking } = useBooking();
     const { theme } = useTheme();
+    const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
+    const [isDiplomasOpen, setIsDiplomasOpen] = useState(false);
 
     const portraitSrc = theme === 'dark' 
         ? "https://storage.googleapis.com/uspeshnyy-projects/burnout/MironovaPortrait_dark.jpg"
         : "https://storage.googleapis.com/uspeshnyy-projects/burnout/MironovaPortrait.jpg";
+
+    const diplomaItems = [
+      { id: 'dip1', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/1.jpeg' },
+      { id: 'dip2', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/2.jpeg' },
+      { id: 'dip3', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/3.jpeg' },
+      { id: 'dip4', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/4.jpeg' },
+      { id: 'dip5', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/5.jpeg' },
+      { id: 'dip6', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/6.jpeg' },
+      { id: 'dip7', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/7.jpeg' },
+      { id: 'dip8', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/8.jpeg' },
+      { id: 'dip9', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/9.jpeg' },
+      { id: 'dip10', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/10.jpeg' },
+      { id: 'dip11', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/11.jpeg' },
+      { id: 'dip12', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/12.jpeg' },
+      { id: 'dip13', src: 'https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/diploms/13.jpeg' }
+    ];
 
     return (
         <section id="about" className="py-32 bg-[#F8F9F9] dark:bg-[#0B1121] overflow-hidden">
@@ -951,10 +785,24 @@ const AboutSection = () => {
                 </div>
                 <div className="w-full lg:w-1/2 space-y-12">
                     <div className="space-y-6"><span className="text-[10px] uppercase tracking-[0.4em] font-bold text-[#CFB997]">{t.doctor.tag}</span><h2 className="text-5xl md:text-8xl serif-font italic dark:text-white leading-none">{t.doctor.name}</h2><p className="text-lg md:text-xl italic font-serif opacity-60 italic dark:text-slate-400">{t.doctor.quote}</p></div>
-                    <div className="flex flex-wrap gap-4 pt-4"><GoldButton onClick={openBooking}>{language === 'ru' ? 'Записаться на консультацию' : 'Book Consultation'}</GoldButton></div>
+                    <div className="flex flex-wrap gap-6 pt-4">
+                        <GoldButton onClick={openBooking}>{language === 'ru' ? 'Записаться на консультацию' : 'Book Consultation'}</GoldButton>
+                        <div className="flex flex-wrap gap-4 w-full">
+                          <button onClick={() => setIsDiplomasOpen(true)} className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] font-bold border-b border-[#CFB997]/30 pb-1 hover:border-[#CFB997] transition-all dark:text-white group">
+                            <ImageIcon className="w-4 h-4 text-[#CFB997]" /> {t.about.buttons.diplomas}
+                          </button>
+                          <button onClick={() => setIsDoctorModalOpen(true)} className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] font-bold border-b border-[#CFB997]/30 pb-1 hover:border-[#CFB997] transition-all dark:text-white group">
+                            <FileText className="w-4 h-4 text-[#CFB997]" /> {t.about.buttons.more}
+                          </button>
+                        </div>
+                    </div>
                 </div>
                 </div>
             </div>
+            <DoctorDetailsModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} />
+            <AnimatePresence>
+                {isDiplomasOpen && <Lightbox items={diplomaItems} initialIndex={0} onClose={() => setIsDiplomasOpen(false)} />}
+            </AnimatePresence>
         </section>
     );
 };
@@ -963,7 +811,7 @@ const AboutSection = () => {
 
 const App = () => {
   const [language, setLanguage] = useState<Language>('ru');
-  const [theme, setTheme] = useState<Theme>('dark'); // Default to dark as per request
+  const [theme, setTheme] = useState<Theme>('dark'); 
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -1002,25 +850,10 @@ const App = () => {
               <Hero />
               <OperationsList />
               <PortfolioSection />
-              <MediaStudio />
               <PriceListSection />
               <AboutSection />
             </main>
-            <footer id="contacts" className="bg-[#0B1121] text-white py-24 border-t border-white/5">
-              <div className="container mx-auto px-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
-                  <div className="space-y-8">
-                      <img src="https://storage.googleapis.com/uspeshnyy-projects/burnout/EM-logo-100-dark.png" alt="Logo" className="h-10" />
-                      <p className="text-sm opacity-40 italic leading-relaxed dark:text-white/40">{t.hero.desc}</p>
-                  </div>
-                  <div><h4 className="text-[10px] uppercase tracking-widest font-bold text-[#CFB997] mb-10">{t.footer.nav_title}</h4><nav className="flex flex-col gap-5 text-sm opacity-60">{['operations', 'portfolio', 'price', 'about'].map(id => (<button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({behavior: 'smooth'})} className="text-left hover:text-white transition-colors">{t.nav[id as keyof typeof t.nav]}</button>))}</nav></div>
-                  <div className="space-y-8"><h4 className="text-[10px] uppercase tracking-widest font-bold text-[#CFB997]">{t.footer.contacts_title}</h4><div className="flex flex-col gap-5 text-sm opacity-60"><div className="flex items-start gap-4"><MapPin className="w-4 h-4 text-[#CFB997] mt-1" /><span>{CONFIG.CONTACTS.ADDRESS}</span></div><div className="flex items-center gap-4"><Phone className="w-4 h-4 text-[#CFB997]" /><a href={`tel:${CONFIG.CONTACTS.PHONE}`} className="hover:text-white">{CONFIG.CONTACTS.PHONE_DISPLAY}</a></div></div></div>
-                </div>
-                <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between gap-8 text-[10px] uppercase tracking-widest opacity-30 italic dark:text-white/30">
-                    <p>© {new Date().getFullYear()} {t.footer.rights}</p>
-                </div>
-              </div>
-            </footer>
+            <Footer />
             <VoiceAssistant />
             <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} />
             <LegalModal />
@@ -1028,6 +861,51 @@ const App = () => {
         </BookingContext.Provider>
       </ThemeContext.Provider>
     </LanguageContext.Provider>
+  );
+};
+
+const Footer = () => {
+  const { t } = useLanguage();
+  const { openLegal } = useBooking();
+  return (
+    <footer id="contacts" className="bg-[#0B1121] text-white py-24 border-t border-white/5">
+      <div className="container mx-auto px-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
+          <div className="space-y-8">
+              <img src="https://storage.googleapis.com/uspeshnyy-projects/burnout/EM-logo-100-dark.png" alt="Logo" className="h-10" />
+              <p className="text-sm opacity-40 italic leading-relaxed dark:text-white/40">{t.hero.desc}</p>
+          </div>
+          <div><h4 className="text-[10px] uppercase tracking-widest font-bold text-[#CFB997] mb-10">{t.footer.nav_title}</h4><nav className="flex flex-col gap-5 text-sm opacity-60">{['operations', 'portfolio', 'price', 'about'].map(id => (<button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({behavior: 'smooth'})} className="text-left hover:text-white transition-colors">{t.nav[id as keyof typeof t.nav]}</button>))}</nav></div>
+          <div className="space-y-8">
+            <h4 className="text-[10px] uppercase tracking-widest font-bold text-[#CFB997]">{t.footer.contacts_title}</h4>
+            <div className="flex flex-col gap-5 text-sm opacity-60">
+              <div className="flex items-start gap-4"><MapPin className="w-4 h-4 text-[#CFB997] mt-1" /><span>{CONFIG.CONTACTS.ADDRESS}</span></div>
+              <div className="flex items-center gap-4"><Phone className="w-4 h-4 text-[#CFB997]" /><a href={`tel:${CONFIG.CONTACTS.PHONE}`} className="hover:text-white">{CONFIG.CONTACTS.PHONE_DISPLAY}</a></div>
+            </div>
+          </div>
+          <div className="space-y-8">
+            <h4 className="text-[10px] uppercase tracking-widest font-bold text-[#CFB997]">{t.footer.patients_title}</h4>
+            <div className="flex flex-col gap-5 text-sm opacity-60">
+              <button onClick={openLegal} className="flex items-center gap-3 text-left hover:text-[#CFB997] transition-colors group">
+                <ShieldCheck className="w-4 h-4 text-[#CFB997] group-hover:scale-110 transition-transform" />
+                <span>{t.footer.legal_link}</span>
+              </button>
+              <button onClick={openLegal} className="flex items-center gap-3 text-left hover:text-[#CFB997] transition-colors group">
+                <CreditCard className="w-4 h-4 text-[#CFB997] group-hover:scale-110 transition-transform" />
+                <span>{t.footer.links.prep}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 text-[10px] uppercase tracking-widest opacity-30 italic dark:text-white/30">
+            <p>© {new Date().getFullYear()} {t.footer.rights}</p>
+            <div className="flex gap-8">
+              <button onClick={openLegal} className="hover:text-white transition-colors">{t.footer.policy}</button>
+              <button onClick={openLegal} className="hover:text-white transition-colors">{t.footer.offer}</button>
+            </div>
+        </div>
+      </div>
+    </footer>
   );
 };
 
