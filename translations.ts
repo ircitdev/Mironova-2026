@@ -143,7 +143,15 @@ export const TRANSLATIONS = {
         listening: "Слушаю...",
         speaking: "Говорю...",
         active_desc: "Голосовой помощник доктора Мироновой",
-        stop: "Завершить диалог"
+        stop: "Завершить диалог",
+        hints_title: "О чем можно спросить?",
+        hints: [
+            "Какие операции проводит доктор Миронова?",
+            "Расскажите про опыт и квалификацию врача",
+            "Сколько стоит блефаропластика?",
+            "Как подготовиться к операции?",
+            "Где находится клиника?"
+        ]
     }
   },
   en: {
@@ -290,7 +298,15 @@ export const TRANSLATIONS = {
         listening: "Listening...",
         speaking: "Speaking...",
         active_desc: "Dr. Mironova's Voice Assistant",
-        stop: "End Chat"
+        stop: "End Chat",
+        hints_title: "What can you ask?",
+        hints: [
+            "What procedures does Dr. Mironova perform?",
+            "Tell me about the doctor's experience",
+            "How much does a blepharoplasty cost?",
+            "How to prepare for surgery?",
+            "Where is the clinic located?"
+        ]
     }
   }
 };

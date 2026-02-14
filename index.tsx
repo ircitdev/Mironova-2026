@@ -34,10 +34,12 @@ import {
   Truck,
   ShieldAlert,
   Undo2,
-  ImageOff
+  ImageOff,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring, Variants } from 'framer-motion';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import ReactMarkdown from 'react-markdown';
 import Lenis from 'lenis';
 
 import { TRANSLATIONS } from './translations';
@@ -221,7 +223,7 @@ const SectionTitle = ({ children, subtitle, align = "center", dark = false }: { 
       </motion.div>
     )}
   </div>
-);
+SectionTitle);
 
 // --- Before/After Component ---
 
@@ -448,20 +450,47 @@ function uint8ArrayToBase64(bytes: Uint8Array) {
 
 // --- Voice Assistant Component ---
 
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+};
+
 const VoiceAssistant = () => {
   const { t, language } = useLanguage();
   const [isActive, setIsActive] = useState(false);
   const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking'>('idle');
   const [volume, setVolume] = useState(0);
+  const [showHints, setShowHints] = useState(true);
   
-  // Refs for audio handling
+  // Chat History & Realtime Transcripts
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [realtimeInput, setRealtimeInput] = useState('');
+  const [realtimeOutput, setRealtimeOutput] = useState('');
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Refs for audio handling & transcript accumulation
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
   const activeSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
-  const sessionRef = useRef<any>(null); // Gemini Session
+  const sessionRef = useRef<any>(null);
+  
+  // Refs for accumulating text fragments before commit
+  const inputTranscriptRef = useRef('');
+  const outputTranscriptRef = useRef('');
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (isActive) {
+        scrollToBottom();
+    }
+  }, [messages, realtimeInput, realtimeOutput, isActive]);
 
   const stop = async () => {
     setIsActive(false);
@@ -496,10 +525,15 @@ const VoiceAssistant = () => {
     }
     
     setVolume(0);
+    setRealtimeInput('');
+    setRealtimeOutput('');
+    inputTranscriptRef.current = '';
+    outputTranscriptRef.current = '';
   };
 
   const start = async () => {
     try {
+        setMessages([]); // Clear previous chat on new session
         setIsActive(true);
         setStatus('connecting');
 
@@ -525,12 +559,21 @@ const VoiceAssistant = () => {
         const session = await ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-12-2025',
             config: {
-                systemInstruction: `You are the voice assistant for "Sculpted Elegance", the premium aesthetic medicine clinic of Dr. Elena Mironova in Moscow.
-Your goal is to politely and professionally answer questions about plastic surgery services (Face, Breast, Body), Dr. Mironova's experience (15 years, PhD), and encourage users to book a consultation.
-Do not provide specific medical advice or diagnoses.
-If asked about prices, provide the ranges from your knowledge base (approximate).
-Speak in the language the user speaks (default to Russian if unsure).
-Keep responses concise and elegant.`,
+                responseModalities: [Modality.AUDIO],
+                inputAudioTranscription: {},
+                outputAudioTranscription: {},
+                systemInstruction: `You are 'Elegance', the sophisticated AI concierge for Dr. Elena Mironova's premium aesthetic surgery clinic in Moscow. Your persona is professional, deeply empathetic, and reflects the highest standards of luxury medical service.
+
+Key traits:
+- Professionalism: Use refined, respectful language. You represent a PhD surgeon with over 15 years of experience.
+- Empathy: Acknowledge that aesthetic changes are significant personal decisions. Use a reassuring, calm tone.
+- Brand Alignment: Refer to the clinic as 'Sculpted Elegance' when appropriate. 
+- Expert Knowledge: You are knowledgeable about Face (SMAS, blepharoplasty), Breast (augmentation, lift, reduction), and Body (liposuction, abdominoplasty) surgeries.
+- Boundaries: Never provide definitive medical diagnoses. Always emphasize that a personal consultation is mandatory for medical assessment and final surgical planning.
+- Pricing: Provide approximate ranges based on our standard rates, but always clarify that final costs are determined only after a consultation.
+- Goal: Your primary objective is to assist patients and gently guide them toward booking a consultation via the website or by phone.
+
+Languages: Speak the user's language (Russian or English). Maintain an elegant and reassuring tone at all times.`,
             },
             callbacks: {
                 onopen: () => {
@@ -573,8 +616,36 @@ Keep responses concise and elegant.`,
                     processor.connect(inputCtx.destination);
                     processorRef.current = processor;
                 },
-                onmessage: async (msg) => {
-                     // Handle Audio Output
+                onmessage: async (msg: LiveServerMessage) => {
+                     // 1. Handle Transcriptions
+                     const content = msg.serverContent;
+                     if (content) {
+                        if (content.outputTranscription?.text) {
+                            outputTranscriptRef.current += content.outputTranscription.text;
+                            setRealtimeOutput(outputTranscriptRef.current);
+                        }
+                        if (content.inputTranscription?.text) {
+                            inputTranscriptRef.current += content.inputTranscription.text;
+                            setRealtimeInput(inputTranscriptRef.current);
+                        }
+                        
+                        // Commit messages on turn complete
+                        if (content.turnComplete) {
+                            if (inputTranscriptRef.current.trim()) {
+                                setMessages(prev => [...prev, { role: 'user', content: inputTranscriptRef.current.trim() }]);
+                                inputTranscriptRef.current = '';
+                                setRealtimeInput('');
+                                if (showHints) setShowHints(false);
+                            }
+                            if (outputTranscriptRef.current.trim()) {
+                                setMessages(prev => [...prev, { role: 'assistant', content: outputTranscriptRef.current.trim() }]);
+                                outputTranscriptRef.current = '';
+                                setRealtimeOutput('');
+                            }
+                        }
+                     }
+
+                     // 2. Handle Audio Output
                      const data = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                      if (data && audioContextRef.current) {
                         setStatus('speaking');
@@ -639,9 +710,10 @@ Keep responses concise and elegant.`,
             {isActive && (
                 <motion.div 
                     {...ANIMATIONS.POPUP}
-                    className="bg-white dark:bg-[#151E32] rounded-2xl shadow-2xl p-6 w-72 md:w-80 border border-gray-200 dark:border-white/10"
+                    className="bg-white dark:bg-[#151E32] rounded-2xl shadow-2xl overflow-hidden w-[90vw] md:w-96 border border-gray-200 dark:border-white/10 flex flex-col max-h-[80vh]"
                 >
-                    <div className="flex justify-between items-center mb-6">
+                    {/* Header */}
+                    <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-white/5">
                         <div className="flex items-center gap-2">
                              <motion.div 
                                 animate={{ opacity: [0.5, 1, 0.5] }}
@@ -655,51 +727,152 @@ Keep responses concise and elegant.`,
                         </button>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center py-4">
-                        {/* Visualizer */}
-                        <div className="relative w-24 h-24 flex items-center justify-center mb-4">
-                             {/* Connecting State */}
-                             {status === 'connecting' && (
-                                <motion.div 
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                    className="absolute inset-0 rounded-full border-2 border-dashed border-[#CFB997]"
-                                />
-                             )}
-
-                             {/* Outer Ripple */}
-                             <motion.div 
-                                animate={{ 
-                                    scale: status === 'connecting' ? 1 : 1 + (Math.max(volume, 5) / 100) * 0.5,
-                                    opacity: status === 'connecting' ? 0.5 : 1
-                                }}
-                                transition={status === 'connecting' ? {} : { type: "spring", stiffness: 300, damping: 20 }}
-                                className={`absolute inset-0 rounded-full ${status === 'connecting' ? 'bg-[#CFB997]/5' : 'bg-[#CFB997]/20'}`}
-                             />
-                             
-                             {/* Inner Ripple */}
-                             <motion.div 
-                                animate={{ 
-                                    scale: status === 'connecting' ? 1 : 1 + (Math.max(volume, 5) / 100) * 0.3 
-                                }}
-                                transition={status === 'connecting' ? {} : { type: "spring", stiffness: 300, damping: 20 }}
-                                className={`absolute inset-2 rounded-full ${status === 'connecting' ? 'bg-[#CFB997]/10' : 'bg-[#CFB997]/40'}`}
-                             />
-                             
-                             {/* Core Icon */}
-                             <div className={`absolute inset-4 bg-gradient-to-br rounded-full flex items-center justify-center shadow-inner transition-colors duration-500 ${status === 'speaking' ? 'from-[#006E77] to-[#004D53]' : 'from-[#CFB997] to-[#B7C9CC]'}`}>
-                                {status === 'speaking' ? <Volume2 className="w-8 h-8 text-white" /> : <Mic className="w-8 h-8 text-white" />}
+                    {/* Chat Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-[#0B1121] min-h-[300px]">
+                        {messages.length === 0 && !realtimeInput && !realtimeOutput && (
+                             <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-6">
+                                 <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="p-4 bg-white dark:bg-[#151E32] rounded-full shadow-lg border border-[#CFB997]/20"
+                                 >
+                                    <Sparkles className="w-8 h-8 text-[#CFB997]" />
+                                 </motion.div>
+                                 
+                                 {showHints && (
+                                     <motion.div 
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="relative w-full"
+                                     >
+                                         <button 
+                                            onClick={() => setShowHints(false)}
+                                            className="absolute -top-2 -right-2 p-1 bg-white dark:bg-[#151E32] rounded-full shadow-sm border border-gray-100 dark:border-white/10 text-gray-400 hover:text-gray-600 transition-colors z-10"
+                                         >
+                                             <X className="w-3 h-3" />
+                                         </button>
+                                         <div className="bg-white dark:bg-[#151E32]/50 backdrop-blur-sm rounded-2xl p-6 border border-[#CFB997]/10 shadow-sm">
+                                             <div className="flex items-center gap-2 mb-4 justify-center">
+                                                 <HelpCircle className="w-4 h-4 text-[#CFB997]" />
+                                                 <h4 className="text-xs font-bold uppercase tracking-[0.1em] text-[#006E77] dark:text-[#80DED9]">{t.assistant.hints_title}</h4>
+                                             </div>
+                                             <div className="flex flex-wrap gap-2 justify-center">
+                                                 {t.assistant.hints.map((hint, idx) => (
+                                                     <motion.div 
+                                                        key={idx}
+                                                        initial={{ opacity: 0, scale: 0.9 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        transition={{ delay: 0.1 + idx * 0.1 }}
+                                                        className="px-3 py-2 bg-slate-50 dark:bg-black/20 rounded-lg text-xs text-slate-600 dark:text-slate-400 border border-gray-100 dark:border-white/5 italic shadow-sm"
+                                                     >
+                                                         {hint}
+                                                     </motion.div>
+                                                 ))}
+                                             </div>
+                                         </div>
+                                     </motion.div>
+                                 )}
+                                 
+                                 {!showHints && (
+                                     <p className="text-sm font-serif italic text-slate-400 dark:text-slate-500">
+                                        {language === 'ru' 
+                                          ? "Я готов ответить на ваши вопросы..." 
+                                          : "I am ready to answer your questions..."}
+                                     </p>
+                                 )}
                              </div>
-                        </div>
+                        )}
                         
-                        <p className="text-sm font-medium text-[#1A202C] dark:text-white mb-1">
-                            {status === 'connecting' ? t.assistant.connecting : 
-                             status === 'speaking' ? t.assistant.speaking :
-                             t.assistant.listening}
-                        </p>
-                        <p className="text-xs text-[#718096] dark:text-[#94A3B8] text-center">
-                            {t.assistant.active_desc}
-                        </p>
+                        {messages.map((msg, idx) => (
+                            <motion.div 
+                                key={idx} 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                                <div className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed shadow-sm ${
+                                    msg.role === 'user' 
+                                      ? 'bg-gradient-to-r from-[#CFB997] to-[#B7C9CC] text-white rounded-br-none' 
+                                      : 'bg-white dark:bg-[#151E32] text-slate-800 dark:text-slate-100 border border-gray-100 dark:border-white/10 rounded-bl-none'
+                                }`}>
+                                    {msg.role === 'assistant' ? (
+                                        <ReactMarkdown 
+                                            components={{
+                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                                                li: ({node, ...props}) => <li className="" {...props} />,
+                                                strong: ({node, ...props}) => <span className="font-semibold text-[#006E77] dark:text-[#80DED9]" {...props} />,
+                                                code: ({node, ...props}) => <code className="bg-gray-100 dark:bg-black/30 px-1 py-0.5 rounded text-xs" {...props} />
+                                            }}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
+                                    ) : (
+                                        msg.content
+                                    )}
+                                </div>
+                            </motion.div>
+                        ))}
+
+                        {/* Realtime User Input */}
+                        {realtimeInput && (
+                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-end">
+                                 <div className="max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed shadow-sm bg-gradient-to-r from-[#CFB997]/70 to-[#B7C9CC]/70 text-white rounded-br-none backdrop-blur-sm">
+                                     {realtimeInput}
+                                     <span className="inline-block w-1.5 h-3 ml-1 bg-white animate-pulse align-middle" />
+                                 </div>
+                             </motion.div>
+                        )}
+
+                        {/* Realtime AI Output */}
+                        {realtimeOutput && (
+                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                                 <div className="max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed shadow-sm bg-white/80 dark:bg-[#151E32]/80 text-slate-800 dark:text-slate-100 border border-gray-100 dark:border-white/10 rounded-bl-none">
+                                     <ReactMarkdown 
+                                        components={{
+                                            p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                            ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                                            strong: ({node, ...props}) => <span className="font-semibold text-[#006E77] dark:text-[#80DED9]" {...props} />
+                                        }}
+                                     >
+                                         {realtimeOutput}
+                                     </ReactMarkdown>
+                                     <span className="inline-block w-1.5 h-3 ml-1 bg-[#CFB997] animate-pulse align-middle" />
+                                 </div>
+                             </motion.div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Visualizer Footer */}
+                    <div className="p-4 bg-white dark:bg-[#151E32] flex items-center justify-between border-t border-gray-100 dark:border-white/5">
+                        <div className="flex items-center gap-3">
+                            <div className="relative w-10 h-10 flex items-center justify-center">
+                                 {status === 'connecting' && (
+                                    <motion.div 
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                        className="absolute inset-0 rounded-full border-2 border-dashed border-[#CFB997]"
+                                    />
+                                 )}
+                                 <motion.div 
+                                    animate={{ 
+                                        scale: status === 'connecting' ? 1 : 1 + (Math.max(volume, 5) / 100) * 0.5
+                                    }}
+                                    className={`absolute inset-0 rounded-full ${status === 'connecting' ? 'bg-[#CFB997]/5' : 'bg-[#CFB997]/20'}`}
+                                 />
+                                 <div className={`absolute inset-2 bg-gradient-to-br rounded-full flex items-center justify-center shadow-inner transition-colors duration-500 ${status === 'speaking' ? 'from-[#006E77] to-[#004D53]' : 'from-[#CFB997] to-[#B7C9CC]'}`}>
+                                    {status === 'speaking' ? <Volume2 className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
+                                 </div>
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-[#1A202C] dark:text-white">
+                                    {status === 'connecting' ? t.assistant.connecting : 
+                                     status === 'speaking' ? t.assistant.speaking :
+                                     t.assistant.listening}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </motion.div>
             )}
