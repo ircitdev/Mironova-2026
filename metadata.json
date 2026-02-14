@@ -1,0 +1,7 @@
+{
+  "description": "Элитный медицинский лендинг Доктора Мироновой с интегрированным AI ассистентом.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "name": "Doc Mironova React 2026"
+}
