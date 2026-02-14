@@ -1373,4 +1373,807 @@ const Portfolio = () => {
                                 exit={{ opacity: 0, scale: 0.8 }}
                                 transition={{ duration: 0.3 }}
                                 className="aspect-square relative overflow-hidden group cursor-pointer rounded-sm shadow-sm"
-                                onClick={() =>
+                                onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
+                            >
+                                <img 
+                                    src={item.src} 
+                                    alt={`Result ${item.category}`} 
+                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                                    loading="lazy" 
+                                />
+                                <div className="absolute inset-0 bg-[#006E77]/0 group-hover:bg-[#006E77]/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                    <div className="bg-white/90 p-3 rounded-full shadow-lg transform scale-0 group-hover:scale-100 transition-transform duration-300">
+                                        <Plus className="w-6 h-6 text-[#006E77]" />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                </motion.div>
+                
+                <div className="text-center">
+                   <p className="text-xs text-gray-400 dark:text-gray-600 mb-4 uppercase tracking-widest">
+                       {filteredItems.length} {filter === 'all' ? 'Всего' : 'в категории'}
+                   </p>
+                </div>
+            </div>
+            <AnimatePresence>
+                {lightboxOpen && (
+                    <Lightbox 
+                        images={lightboxImages} 
+                        initialIndex={lightboxIndex} 
+                        onClose={() => setLightboxOpen(false)} 
+                    />
+                )}
+            </AnimatePresence>
+        </section>
+    );
+}
+
+// --- About Component ---
+
+const About = () => {
+    const { t } = useLanguage();
+    const [modalOpen, setModalOpen] = useState(false);
+
+    return (
+        <section id="about" className="py-32 bg-white dark:bg-[#151E32] overflow-hidden">
+            <div className="container mx-auto px-6">
+                <div className="flex flex-col md:flex-row items-center gap-16">
+                        <motion.div 
+                        initial={{ opacity: 0, x: -50 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        className="w-full md:w-1/2"
+                        >
+                            <div className="relative">
+                                <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-9.jpg" alt="Dr. Mironova" className="w-full max-w-md mx-auto shadow-2xl" loading="lazy" />
+                                <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-[#F8F9F9] dark:bg-[#0B1121] -z-10 rounded-full blur-3xl opacity-50"></div>
+                            </div>
+                        </motion.div>
+                        <motion.div 
+                        initial={{ opacity: 0, x: 50 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        className="w-full md:w-1/2"
+                        >
+                        <SectionTitle align="left" subtitle={t.doctor.tag}>{t.doctor.name}</SectionTitle>
+                        <h3 className="text-xl text-[#006E77] dark:text-[#80DED9] mb-6">{t.doctor.title}</h3>
+                        <p className="text-lg italic text-[#5A6A7A] dark:text-[#94A3B8] mb-8 border-l-4 border-[#CFB997] pl-6 py-2">
+                            {t.about.quote1}
+                        </p>
+                        <div className="flex gap-8 mb-10">
+                            <div>
+                                <p className="text-4xl font-serif text-[#1A202C] dark:text-white mb-1">15+</p>
+                                <p className="text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8]">{t.about.exp}</p>
+                            </div>
+                            <div>
+                                <p className="text-4xl font-serif text-[#1A202C] dark:text-white mb-1">3000+</p>
+                                <p className="text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8]">{t.about.stats.ops}</p>
+                            </div>
+                        </div>
+                        <GoldButton onClick={() => setModalOpen(true)}>{t.about.buttons.more}</GoldButton>
+                        </motion.div>
+                </div>
+            </div>
+            <AnimatePresence>
+                {modalOpen && <DoctorInfoModal onClose={() => setModalOpen(false)} />}
+            </AnimatePresence>
+        </section>
+    );
+}
+
+// --- Legal Modal & Tabs ---
+
+const LegalModal = ({ onClose }: { onClose: () => void }) => {
+  const [activeTab, setActiveTab] = useState(0);
+  
+  const tabs = [
+    { title: "Оферта: Организация лечения", icon: FileText },
+    { title: "Оферта: Консультация", icon: FileText },
+    { title: "Оферта: Организация очной консультации", icon: FileText },
+    { title: "Оплата услуг", icon: CreditCard },
+    { title: "Оказание услуг", icon: Truck },
+    { title: "Соглашение на обработку персональных данных", icon: ShieldAlert },
+    { title: "Отмена и возврат", icon: Undo2 }
+  ];
+
+  const OfferTemplate = ({ serviceName, price, terms }: { serviceName: string, price: string, terms: React.ReactNode }) => (
+    <div className="space-y-6 text-sm text-[#1A202C] dark:text-white leading-relaxed font-sans">
+        <h1 className="text-2xl font-serif text-center mb-6">Счет-оферта</h1>
+
+        {/* Bank Details Table */}
+        <div className="overflow-x-auto mb-6">
+            <table className="w-full border-collapse border border-gray-300 text-[10px] md:text-xs bg-white dark:bg-[#151E32]">
+                <tbody>
+                    <tr>
+                        <td colSpan={2} rowSpan={2} className="border border-gray-300 p-2 align-top">Банк получателя: ___________________________</td>
+                        <td className="border border-gray-300 p-2">БИК</td>
+                        <td className="border border-gray-300 p-2">________________</td>
+                    </tr>
+                    <tr>
+                        <td className="border border-gray-300 p-2">К/с банка</td>
+                        <td className="border border-gray-300 p-2">________________</td>
+                    </tr>
+                    <tr>
+                        <td className="border border-gray-300 p-2">ИНН 772794015348</td>
+                        <td className="border border-gray-300 p-2">Счет получателя</td>
+                        <td colSpan={2} className="border border-gray-300 p-2">________________</td>
+                    </tr>
+                    <tr>
+                        <td colSpan={4} className="border border-gray-300 p-2">Получатель: ИП Миронова Елена Александровна</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div className="mb-4 text-xs">
+            <p className="mb-2"><strong>Исполнитель:</strong> Индивидуальный предприниматель Миронова Елена Александровна (ОГРНИП 325774600642997)</p>
+            <p><strong>Заказчик/Потребитель:</strong> Настоящий счет-оферта в соответствии с положениями ст. 435 ГК РФ является офертой и адресован любому лицу, являющемуся резидентом РФ, которое акцептует ее условия.</p>
+        </div>
+
+        <p className="text-xs">В соответствии с настоящим Счетом-офертой Исполнитель обязуется предоставить Заказчику услуги, а Заказчик/Потребитель принять и оплатить их:</p>
+
+        {/* Service Table */}
+        <div className="overflow-x-auto mb-6">
+            <table className="w-full border-collapse border border-gray-300 text-[10px] md:text-xs bg-white dark:bg-[#151E32]">
+                <thead>
+                    <tr className="bg-gray-50 dark:bg-white/5">
+                        <th className="border border-gray-300 p-2 text-left font-bold">N п/п</th>
+                        <th className="border border-gray-300 p-2 text-left font-bold">Наименование услуги</th>
+                        <th className="border border-gray-300 p-2 text-left font-bold">Кол-во</th>
+                        <th className="border border-gray-300 p-2 text-left font-bold">Ед.</th>
+                        <th className="border border-gray-300 p-2 text-left font-bold">Цена, руб.</th>
+                        <th className="border border-gray-300 p-2 text-left font-bold">Стоимость, руб.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td className="border border-gray-300 p-2">1</td>
+                        <td className="border border-gray-300 p-2">{serviceName}</td>
+                        <td className="border border-gray-300 p-2">1</td>
+                        <td className="border border-gray-300 p-2">шт.</td>
+                        <td className="border border-gray-300 p-2">{price}</td>
+                        <td className="border border-gray-300 p-2">{price}</td>
+                    </tr>
+                    <tr>
+                        <td colSpan={5} className="border border-gray-300 p-2 text-right font-bold">Итого:</td>
+                        <td className="border border-gray-300 p-2 font-bold">{price}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p className="font-bold text-sm mb-6">Итого к оплате: {price} рублей 00 копеек.</p>
+
+        <div className="text-xs space-y-3 opacity-90 leading-relaxed">
+            {terms}
+        </div>
+
+        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-white/10 flex flex-wrap justify-between gap-8 text-xs">
+            <div className="w-full md:w-[45%]">
+                <p><strong>Сведения об Исполнителе:</strong><br/>
+                Индивидуальный предприниматель<br/>
+                Миронова Елена Александровна<br/>
+                ОГРНИП 325774600642997<br/>
+                ИНН 772794015348<br/>
+                e-mail: doc-mironova.ru@yandex.ru<br/>
+                Тел.: +7 985-728-51-02</p>
+            </div>
+            <div className="w-full md:w-[45%]">
+                <p><strong>Банковские реквизиты:</strong><br/>
+                Получатель: ИП Миронова Е.А.<br/>
+                р/с ___________________________<br/>
+                к/с ___________________________<br/>
+                ИНН __________________________<br/>
+                БИК __________________________</p>
+            </div>
+        </div>
+        
+        <div className="mt-8 font-bold border-t border-dashed border-gray-300 pt-4 inline-block pr-20">
+            ИП Миронова Е.А.
+        </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 0: return (
+        <OfferTemplate 
+            serviceName="Сервисно-информационное обслуживание Заказчика по организации хирургического лечения Заказчика в медицинской организации"
+            price="50 000,00"
+            terms={
+                <>
+                    <p>В рамках оказания Услуг Исполнитель обязуется предоставить Заказчику/Потребителю информацию о возможности и порядке записи на операцию, объеме догоспитальных исследований и особенностях подготовки и послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения, забронировать дату и время операционной для оказания медицинской помощи Заказчику/ Потребителю, при необходимости разрешить вопрос о привлечении дополнительного медицинского персонала.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает, что Исполнитель уведомил его о том, что на внесенную им сумму денежных средств Исполнитель, в том числе, закупает расходный материал, необходимый для выполнения показанной и согласованной операции, и выполняет иные действия для последующего оказания Заказчику/ Потребителю медицинских услуг.</p>
+                    <p>К фактически понесенным расходам Исполнителя относятся, включая, но не ограничиваясь: приобретение изделий медицинского назначения, расходного материала (медикаментов, компрессионного белья, компрессионных чулок и др.), бронирование операционной и палаты, привлечение специалистов, заказ питания и т.д. в целях оказания медицинских услуг Заказчику/Потребителю.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                        <li>Уплаченная Заказчиком/Потребителем денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика/Потребителя от получения услуг в соответствии со ст. 782 ГК РФ.</li>
+                        <li>Исполнитель уведомил Заказчика/Потребителя о том, что в случае, если фактически понесенные Исполнителем расходы превышают сумму внесенных им денежных средств, Исполнитель не взыскивает какую-либо доплату.</li>
+                        <li>Заказчик/Потребитель разрешает Исполнителю получать доступ к сведениям, составляющим врачебную тайну, и персональным данным, без которых невозможно последующее оказание медицинских услуг.</li>
+                    </ul>
+                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик/Потребитель в полном объеме произведет оплату в срок до 5 (пяти) дней сумму, указанную в таблице, по реквизитам расчетного счета Исполнителя.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает, что согласен со всеми его условиями.</p>
+                    <p>Заказчик/Потребитель соглашается, что возврат денежных средств возможен <strong>ИСКЛЮЧИТЕЛЬНО</strong> в следующих случаях:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                        <li>состояние здоровья Потребителя не позволяет выполнить операцию в срок более, чем 6 месяцев;</li>
+                        <li>Исполнитель отказывается от обязанностей лечащего врача медицинской организации, с которой будет заключен договор, в связи с неустановившимся терапевтическим сотрудничеством.</li>
+                    </ul>
+                    <p>Исполнитель уведомил Заказчика/Потребителя о том, что срок возврата денежных средств в указанных случаях составляет 10 (десять) календарных дней.</p>
+                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
+                </>
+            }
+        />
+      );
+      case 1: return (
+        <OfferTemplate 
+            serviceName="Сервисно-информационная консультация перед началом получения медицинской помощи в медицинской организации («Услуга»)"
+            price="5 000,00"
+            terms={
+                <>
+                    <p>Исполнитель в порядке и на условиях, предусмотренных настоящим Счетом-офертой, оказывает Заказчику Услуги, а Заказчик обязуется оплатить эти Услуги в порядке, сроки и на условиях, предусмотренных настоящим Счетом-офертой.</p>
+                    <p>В рамках консультации Исполнитель обязуется предоставить Заказчику информацию о возможности записи на консультацию врача в клинику с согласованием даты и времени, предоставить ему информацию об объемах догоспитальных исследований и особенностях послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения.</p>
+                    <p>Стороны подтверждают, что данная консультация не является медицинской услугой.</p>
+                    <p>Заказчик уведомлен о том, что консультация в рамках настоящего Счета-оферты не является обязательным условием для начала лечения, заказчик имеет возможность заключить договор с медицинской организацией самостоятельно.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик подтверждает, что разрешает Исполнителю получать доступ к сведениям, составляющим его врачебную тайну.</p>
+                    <p>Стороны договорились, что в связи с оказанием услуг посредством телекоммуникации, сканы всех документов приравниваются по силе к оригиналам, а электронная почта и мессенджеры (WhatsApp, Telegram и т.д.) являются надлежащими каналами связи. Акцептируя настоящий Счет-оферту, Заказчик берет на себя ответственность за сохранение врачебной тайны при переписке путем использования электронной почты и мессенджеров.</p>
+                    <p>Вся предоставляемая сторонами друг другу информация является конфиденциальной.</p>
+                    <p>Услуги оказываются Исполнителем дистанционно через сеть Интернет и/или очно.</p>
+                    <p>Услуги, оказываемые по настоящему Счету-оферте, оплачиваются в размере 100% предоплаты.</p>
+                    <p>Исполнитель оказывает Услуги после получения от Заказчика заявки и предоплаты. Заявка оформляется по телефону Исполнителя: +7 985-728-51-02 либо на Сайте Исполнителя https://doc-mironova.ru.</p>
+                    <p>Исполнитель обязуется оказать Заказчику Услуги в срок, не превышающий 30 (тридцати) календарных дней со дня получения от Заказчика полной оплаты по настоящему Счетом-оферте. Исполнитель вправе выполнить свои обязательства досрочно.</p>
+                    <p>Настоящий Счет-оферта имеет силу акта об оказании услуг. Приемка производится без подписания соответствующего акта.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                        <li>Уплаченная денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика от получения услуг (ст. 782 ГК РФ).</li>
+                        <li>Если фактически понесенные расходы превышают сумму внесенных средств, Исполнитель не взыскивает доплату.</li>
+                    </ul>
+                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик произведет оплату суммы в полном объеме.</p>
+                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
+                </>
+            }
+        />
+      );
+      case 2: return (
+        <OfferTemplate 
+            serviceName="Сервисно-информационная консультация перед началом получения медицинской помощи в медицинской организации («Услуга»)"
+            price="5 000,00"
+            terms={
+                <>
+                    <p>Исполнитель в порядке и на условиях, предусмотренных настоящим Счетом-офертой, оказывает Заказчику Услуги, а Заказчик обязуется оплатить эти Услуги в порядке, сроки и на условиях, предусмотренных настоящим Счетом-офертой.</p>
+                    <p>В рамках консультации Исполнитель обязуется предоставить Заказчику информацию о возможности записи на консультацию врача в клинику с согласованием даты и времени, предоставить ему информацию об объемах догоспитальных исследований и особенностях послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения.</p>
+                    <p>Стороны подтверждают, что данная консультация не является медицинской услугой.</p>
+                    <p>Заказчик уведомлен о том, что консультация в рамках настоящего Счета-оферты не является обязательным условием для начала лечения, заказчик имеет возможность заключить договор с медицинской организацией самостоятельно.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик подтверждает, что разрешает Исполнителю получать доступ к сведениям, составляющим его врачебную тайну.</p>
+                    <p>Стороны договорились, что в связи с оказанием услуг посредством телекоммуникации, сканы всех документов приравниваются по силе к оригиналам, а электронная почта и мессенджеры (WhatsApp, Telegram и т.д.) являются надлежащими каналами связи. Акцептируя настоящий Счет-оферту, Заказчик берет на себя ответственность за сохранение врачебной тайны при переписке путем использования электронной почты и мессенджеров.</p>
+                    <p>Вся предоставляемая сторонами друг другу информация является конфиденциальной.</p>
+                    <p>Услуги оказываются Исполнителем дистанционно через сеть Интернет и/или очно.</p>
+                    <p>Услуги, оказываемые по настоящему Счету-оферте, оплачиваются в размере 100% предоплаты.</p>
+                    <p>Исполнитель оказывает Услуги после получения от Заказчика заявки и предоплаты. Заявка оформляется по телефону Исполнителя: +7 985-728-51-02 либо на Сайте Исполнителя https://doc-mironova.ru.</p>
+                    <p>Исполнитель обязуется оказать Заказчику Услуги в срок, не превышающий 30 (тридцати) календарных дней со дня получения от Заказчика полной оплаты по настоящему Счетом-оферте. Исполнитель вправе выполнить свои обязательства досрочно.</p>
+                    <p>Настоящий Счет-оферта имеет силу акта об оказании услуг. Приемка производится без подписания соответствующего акта.</p>
+                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                        <li>Уплаченная денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика от получения услуг (ст. 782 ГК РФ).</li>
+                        <li>Если фактически понесенные расходы превышают сумму внесенных средств, Исполнитель не взыскивает доплату.</li>
+                    </ul>
+                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик произведет оплату суммы в полном объеме.</p>
+                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
+                </>
+            }
+        />
+      );
+      case 3: return (
+        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
+            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Оплата услуг</h2>
+            <p>Для вашего удобства мы поддерживаем современные способы онлайн-оплаты. Принимаются карты систем:</p>
+            <div className="flex gap-6 items-center my-6">
+                <span className="text-2xl font-bold text-[#1a1f71]">VISA</span>
+                <span className="text-2xl font-bold text-[#eb001b]">MasterCard</span>
+                <span className="text-2xl font-bold text-[#00b140]">МИР</span>
+            </div>
+            <p>Процесс оплаты максимально прост: при оформлении заказа на сайте вы будете перенаправлены на защищенную платёжную страницу банка для ввода данных карты:</p>
+            <ul className="list-disc pl-5 space-y-2">
+                <li>Номер карты (16 цифр);</li>
+                <li>Срок действия (месяц/год);</li>
+                <li>Код безопасности CVC2/CVV2.</li>
+            </ul>
+            <p>Безопасность транзакций обеспечивается технологией <strong>3D-Secure</strong> (подтверждение через СМС-код от вашего банка).</p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mt-4">
+                <strong>Безопасность:</strong> Все платежи обрабатываются через защищенный шлюз по международному стандарту PCI DSS. Данные передаются в зашифрованном виде (SSL) и не сохраняются на нашем сервере.
+            </div>
+        </div>
+      );
+      case 4: return (
+        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
+            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Формат и сроки оказания услуг</h2>
+            <p>ИП Миронова Е.А. предоставляет сервисно-информационное обслуживание. Физическая доставка товаров не предусмотрена.</p>
+            <ul className="list-disc pl-5 space-y-3">
+                <li><strong>Дистанционно:</strong> Консультации проводятся онлайн (Zoom, WhatsApp, Telegram, Телефон) для жителей всех регионов РФ.</li>
+                <li><strong>Очно:</strong> По предварительной записи в партнерских клиниках г. Москвы.</li>
+                <li><strong>Сроки:</strong> Информационная поддержка и организация записи осуществляются в течение времени, указанного в вашем Счете-оферте (обычно до 30 дней).</li>
+            </ul>
+        </div>
+      );
+      case 5: return (
+        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
+            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Персональные данные</h2>
+            <p>Мы соблюдаем <strong>ФЗ-152 «О персональных данных»</strong>. Ваши данные (ФИО, контакты, история обращений) используются только для качественного оказания услуг и не передаются третьим лицам без вашего согласия.</p>
+            <p>На сайте используются файлы <strong>cookies</strong> для анализа посещаемости и улучшения интерфейса. Оставаясь на сайте, вы соглашаетесь с нашей политикой конфиденциальности.</p>
+        </div>
+      );
+      case 6: return (
+        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
+            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Отмена и возврат</h2>
+            <p>Мы работаем строго в рамках законодательства РФ (Закон «О защите прав потребителей»):</p>
+            <ul className="list-disc pl-5 space-y-3">
+                <li>Вы вправе отказаться от услуг в любое время, возместив Исполнителю фактически понесенные расходы (бронирование времени, закупка материалов, если это предусмотрено офертой).</li>
+                <li>В случае обоснованных претензий к качеству мы обязуемся устранить недостатки в кратчайшие сроки.</li>
+            </ul>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 mt-6">
+                <strong>Порядок возврата:</strong> Денежные средства возвращаются на ту же банковскую карту, с которой производилась оплата. Срок зачисления средств составляет от 1 до 30 рабочих дней (зависит от вашего банка).
+            </div>
+        </div>
+      );
+      default: return null;
+    }
+  };
+
+  // Prevent background scroll
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = 'unset'; };
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 md:p-6"
+    >
+      <div className="absolute inset-0" onClick={onClose}></div>
+      <motion.div 
+        initial={{ y: 40, opacity: 0, scale: 0.95 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 40, opacity: 0, scale: 0.95 }}
+        transition={PREMIUM_TRANSITION}
+        className="bg-white dark:bg-[#151E32] w-full max-w-6xl h-full md:h-[90vh] md:rounded-xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 md:hidden z-50 p-2 bg-gray-100 rounded-full">
+            <X className="w-5 h-5 text-black" />
+        </button>
+
+        {/* Sidebar */}
+        <div className="w-full md:w-1/4 bg-gray-50 dark:bg-[#0B1121] border-r border-gray-200 dark:border-white/10 flex flex-col">
+            <div className="p-6 border-b border-gray-200 dark:border-white/10 hidden md:block">
+                <h3 className="font-serif text-lg text-[#006E77] dark:text-[#80DED9]">Документация</h3>
+                <p className="text-xs text-gray-500 mt-1">Официальная информация</p>
+            </div>
+            
+            {/* Scrollable tabs list */}
+            <div className="flex-1 overflow-x-auto md:overflow-y-auto flex md:flex-col p-2 gap-1">
+                {tabs.map((tab, idx) => {
+                    const Icon = tab.icon;
+                    return (
+                        <button 
+                            key={idx}
+                            onClick={() => setActiveTab(idx)}
+                            className={`flex items-center gap-3 p-3 text-left rounded-lg transition-all text-xs md:text-sm whitespace-nowrap md:whitespace-normal
+                                ${activeTab === idx 
+                                    ? 'bg-white dark:bg-white/10 shadow-sm text-[#006E77] dark:text-[#80DED9] font-medium border border-gray-200 dark:border-transparent' 
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}
+                        >
+                            <Icon className={`w-4 h-4 flex-shrink-0 ${activeTab === idx ? 'text-[#CFB997]' : 'opacity-50'}`} />
+                            <span>{tab.title}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#151E32]">
+            <button onClick={onClose} className="absolute top-6 right-6 hidden md:block p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors">
+                <X className="w-6 h-6 text-[#1A202C] dark:text-white" />
+            </button>
+            
+            <div className="flex-1 overflow-y-auto p-6 md:p-12">
+                {renderContent()}
+            </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// --- Navbar Component ---
+
+const Navbar = () => {
+    const { t, language, setLanguage } = useLanguage();
+    const { theme, toggleTheme } = useTheme();
+    const { openBooking } = useBooking();
+    const [scrolled, setScrolled] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+    useEffect(() => {
+      const handleScroll = () => setScrolled(window.scrollY > 50);
+      window.addEventListener('scroll', handleScroll);
+      return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+  
+    const navLinks = [
+      { href: '#operations', label: t.nav.operations },
+      { href: '#portfolio', label: t.nav.portfolio },
+      { href: '#price', label: t.nav.prices },
+      { href: '#about', label: t.nav.about },
+      { href: '#contacts', label: t.nav.contacts },
+    ];
+  
+    return (
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 dark:bg-[#151E32]/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`}>
+        <div className="max-w-[1800px] mx-auto px-6 flex items-center justify-between">
+          <a href="#" className="text-2xl font-serif font-bold text-[#1A202C] dark:text-white">Dr. Mironova</a>
+          
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map(link => (
+              <a key={link.href} href={link.href} className="text-sm uppercase tracking-widest text-[#1A202C] dark:text-white hover:text-[#006E77] dark:hover:text-[#80DED9] transition-colors">{link.label}</a>
+            ))}
+          </div>
+  
+          <div className="hidden md:flex items-center gap-6">
+             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-[#1A202C] dark:text-white transition-colors">
+                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+             </button>
+             <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-sm font-medium uppercase text-[#1A202C] dark:text-white hover:text-[#006E77] dark:hover:text-[#80DED9] transition-colors">
+                {language}
+             </button>
+             <GoldButton onClick={openBooking}>{t.nav.book}</GoldButton>
+          </div>
+  
+          <button className="md:hidden text-[#1A202C] dark:text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+  
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+              <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="md:hidden bg-white dark:bg-[#151E32] border-t border-gray-100 dark:border-white/10 overflow-hidden"
+              >
+                  <div className="flex flex-col p-6 gap-4">
+                      {navLinks.map(link => (
+                          <a key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="text-lg font-medium text-[#1A202C] dark:text-white py-2">{link.label}</a>
+                      ))}
+                      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-white/10">
+                          <button onClick={toggleTheme} className="p-2 rounded-full bg-gray-100 dark:bg-white/10 text-[#1A202C] dark:text-white">
+                              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                          </button>
+                          <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-sm font-bold uppercase text-[#1A202C] dark:text-white p-2 border border-gray-200 dark:border-white/20 rounded-md">
+                              {language}
+                          </button>
+                      </div>
+                      <GoldButton onClick={() => { setMobileMenuOpen(false); openBooking(); }} className="w-full justify-center mt-2">{t.nav.book}</GoldButton>
+                  </div>
+              </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
+    );
+  }
+  
+// --- Hero Component ---
+
+const Hero = () => {
+    const { t } = useLanguage();
+    const { openBooking } = useBooking();
+    const lenis = useSmoothScroll();
+
+    return (
+        <section id="hero" className="relative min-h-screen flex items-center pt-20 overflow-hidden">
+            {/* Background Image */}
+            <div className="absolute inset-0 z-0">
+                <picture>
+                    <source media="(max-width: 768px)" srcSet="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-7.jpg" />
+                    <img 
+                        src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-hd-7-1.jpg" 
+                        alt="Dr. Elena Mironova" 
+                        className="w-full h-full object-cover object-top md:object-center" 
+                    />
+                </picture>
+                <div className="absolute inset-0 bg-white/10 dark:bg-black/20 mix-blend-overlay"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/70 to-transparent dark:from-[#0B1121] dark:via-[#0B1121]/80 dark:to-transparent/20"></div>
+            </div>
+
+            <div className="container mx-auto px-6 relative z-10 grid md:grid-cols-2 gap-12 items-center">
+                <motion.div 
+                    initial={{ opacity: 0, x: -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 1 }}
+                >
+                    <span className="inline-block py-1 px-3 border border-[#006E77] text-[#006E77] dark:border-[#80DED9] dark:text-[#80DED9] text-xs uppercase tracking-[0.2em] mb-6 rounded-full bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-sm">
+                        {t.hero.tag}
+                    </span>
+                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif leading-tight text-[#1A202C] dark:text-white mb-8 drop-shadow-sm">
+                        <span className="block">{t.hero.title1}</span>
+                        <span className="block italic text-[#CFB997]">{t.hero.title2}</span>
+                        <span className="block">{t.hero.title3}</span>
+                    </h1>
+                    <p className="text-lg text-[#5A6A7A] dark:text-[#CBD5E1] max-w-md mb-10 leading-relaxed font-medium">
+                        {t.hero.desc}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <GoldButton onClick={openBooking}>{t.hero.cost}</GoldButton>
+                        <GoldButton variant="outline" onClick={() => lenis ? lenis.scrollTo('#portfolio') : document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' })}>
+                            {t.hero.portfolio}
+                        </GoldButton>
+                    </div>
+                </motion.div>
+            </div>
+
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2, duration: 1 }}
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#1A202C] dark:text-white"
+            >
+                <span className="text-[10px] uppercase tracking-widest opacity-60">{t.hero.scroll}</span>
+                <motion.div 
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                >
+                    <ChevronDown className="w-5 h-5 opacity-60" />
+                </motion.div>
+            </motion.div>
+        </section>
+    );
+}
+
+// --- Footer Section ---
+
+const Footer = () => {
+  const { t } = useLanguage();
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+
+  return (
+    <>
+    <footer id="contacts" className="bg-[#1A202C] text-white py-20 border-t border-white/5">
+       <div className="max-w-[1800px] mx-auto px-6 grid md:grid-cols-4 gap-12">
+         <div>
+           <h3 className="text-2xl font-serif mb-6 tracking-wide">Dr. Mironova</h3>
+           <p className="text-gray-400 text-sm mb-6 font-light">{t.footer.address}</p>
+           <div className="flex gap-4">
+             <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+               <Instagram className="w-5 h-5 text-white/80" />
+             </a>
+             <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+               <Youtube className="w-5 h-5 text-white/80" />
+             </a>
+           </div>
+         </div>
+         
+         <div>
+           <h4 className="uppercase tracking-widest text-xs font-bold mb-8 text-[#CFB997]">{t.footer.menu}</h4>
+           <ul className="space-y-4 text-gray-400 text-sm font-light">
+              <li><a href="#operations" className="hover:text-white transition-colors">{t.nav.operations}</a></li>
+              <li><a href="#portfolio" className="hover:text-white transition-colors">{t.nav.portfolio}</a></li>
+              <li><a href="#price" className="hover:text-white transition-colors">{t.nav.prices}</a></li>
+              <li><a href="#about" className="hover:text-white transition-colors">{t.nav.about}</a></li>
+           </ul>
+         </div>
+         
+         <div>
+           <h4 className="uppercase tracking-widest text-xs font-bold mb-8 text-[#CFB997]">{t.footer.contacts}</h4>
+           <ul className="space-y-4 text-gray-400 text-sm font-light">
+              <li className="flex items-center gap-3"><Phone className="w-4 h-4" /> +7 (999) 000-00-00</li>
+              <li className="flex items-center gap-3"><MapPin className="w-4 h-4" /> Москва, Пресненская наб., 12</li>
+              <li className="flex items-center gap-3"><Clock className="w-4 h-4" /> {t.footer.work_hours}</li>
+           </ul>
+         </div>
+         
+         <div>
+            <button 
+                onClick={() => setLegalModalOpen(true)}
+                className="w-full py-4 border border-white/20 hover:bg-white hover:text-[#1A202C] transition-all text-xs uppercase tracking-widest font-medium"
+            >
+              {t.footer.callback}
+            </button>
+         </div>
+       </div>
+       
+       <div className="max-w-[1800px] mx-auto px-6 mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between text-xs text-gray-500 font-light">
+         <span>© 2024 Dr. Elena Mironova. {t.footer.rights}</span>
+         <div className="flex gap-8 mt-4 md:mt-0">
+           <button 
+             onClick={() => setLegalModalOpen(true)}
+             className="hover:text-white transition-colors border-b border-transparent hover:border-white/50 pb-0.5"
+           >
+             Соглашения и оплата
+           </button>
+         </div>
+       </div>
+    </footer>
+    <AnimatePresence>
+      {legalModalOpen && <LegalModal onClose={() => setLegalModalOpen(false)} />}
+    </AnimatePresence>
+    </>
+  )
+};
+
+// --- Preloader Component ---
+
+const Preloader = ({ onComplete }: { onComplete: () => void }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 2500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.8, ease: "easeInOut" }}
+      className="fixed inset-0 z-[999] flex items-center justify-center bg-[#Fdfbf7]"
+    >
+      <div 
+        className="absolute inset-0 z-0 opacity-100"
+        style={{
+            backgroundImage: 'url(https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/texture-papper.jpg)',
+            backgroundSize: 'auto 100%',
+            backgroundRepeat: 'repeat-x',
+            backgroundPosition: 'center'
+        }}
+      />
+      
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
+        className="relative z-10"
+      >
+        <img 
+            src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/logo-gold.png" 
+            alt="Dr. Mironova" 
+            className="w-[240px] md:w-[320px] h-auto object-contain drop-shadow-sm" 
+        />
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// --- App Root ---
+
+const App = () => {
+  const [loading, setLoading] = useState(true);
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [language, setLanguageState] = useState<Language>('ru');
+  const [theme, setTheme] = useState<Theme>('light');
+  const [lenis, setLenis] = useState<any>(null);
+
+  useEffect(() => {
+      const lenisInstance = new Lenis({
+        duration: 1.2,
+        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: 'vertical',
+        gestureOrientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 1,
+        touchMultiplier: 2,
+      });
+  
+      setLenis(lenisInstance);
+  
+      function raf(time: number) {
+        lenisInstance.raf(time);
+        requestAnimationFrame(raf);
+      }
+  
+      requestAnimationFrame(raf);
+  
+      // Intercept anchor clicks
+      const handleAnchorClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        const anchor = target.closest('a');
+        const href = anchor?.getAttribute('href');
+        
+        if (anchor && href?.startsWith('#') && href.length > 1) {
+          e.preventDefault();
+          try {
+              const element = document.querySelector(href);
+              if (element) {
+                  lenisInstance.scrollTo(element as HTMLElement);
+              }
+          } catch(e) {}
+        }
+      };
+  
+      document.addEventListener('click', handleAnchorClick);
+  
+      return () => {
+        lenisInstance.destroy();
+        document.removeEventListener('click', handleAnchorClick);
+      };
+  }, []);
+
+  // Load language from system
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      const systemLang = navigator.language || (navigator as any).userLanguage;
+      if (systemLang && systemLang.startsWith('en')) {
+        setLanguageState('en');
+      }
+    }
+  }, []);
+
+  // Theme Logic
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  }, []);
+
+  const openBooking = useCallback(() => setIsBookingOpen(true), []);
+  const closeBooking = useCallback(() => setIsBookingOpen(false), []);
+
+  const contextValue = useMemo(() => ({
+    language,
+    setLanguage: setLanguageState,
+    t: TRANSLATIONS[language]
+  }), [language]);
+
+  // SEO Hook Integration
+  const SeoComponent = () => {
+      useScrollTitle();
+      return null;
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <LanguageContext.Provider value={contextValue}>
+        <SmoothScrollContext.Provider value={lenis}>
+            <SeoComponent />
+            <BookingContext.Provider value={{ isBookingOpen, openBooking, closeBooking }}>
+              <AnimatePresence>
+                 {loading && <Preloader onComplete={() => setLoading(false)} />}
+              </AnimatePresence>
+              
+              <div className={loading ? 'h-screen overflow-hidden' : ''}>
+                <CustomCursor />
+                <Navbar />
+                <main>
+                  <Hero />
+                  <Operations />
+                  <Portfolio />
+                  <PriceList />
+                  <About />
+                </main>
+                <Footer />
+                <BookingPanel />
+                <VoiceAssistant />
+              </div>
+            </BookingContext.Provider>
+        </SmoothScrollContext.Provider>
+      </LanguageContext.Provider>
+    </ThemeContext.Provider>
+  );
+};
+
+const root = createRoot(document.getElementById('root')!);
+root.render(<App />);
