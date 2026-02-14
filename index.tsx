@@ -5,7 +5,7 @@ import {
   Send, 
   ChevronRight, 
   ChevronLeft, 
-  ChevronDown,
+  ChevronDown, 
   MapPin, 
   Phone,
   Sparkles,
@@ -33,9 +33,10 @@ import {
   CreditCard,
   Truck,
   ShieldAlert,
-  Undo2
+  Undo2,
+  ImageOff
 } from 'lucide-react';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, Variants } from 'framer-motion';
 import { GoogleGenAI } from "@google/genai";
 import Lenis from 'lenis';
 
@@ -43,10 +44,38 @@ import { TRANSLATIONS } from './translations';
 import { getPrices } from './prices';
 import { getServicesData } from './servicesData';
 import { getDoctorAccordionItems } from './doctorData';
-import { getPortfolioItems } from './portfolioData';
+import { getPortfolioItems, PortfolioItem } from './portfolioData';
+import { LegalContent } from './LegalContent';
+import { CONFIG } from './config';
 
 // --- Design System Constants ---
-const PREMIUM_TRANSITION = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
+
+// Premium easing curves
+const EASE_PREMIUM = [0.6, 0.01, -0.05, 0.95] as [number, number, number, number];
+
+const ANIMATIONS = {
+  OVERLAY: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 0.4, ease: "easeOut" as const } },
+    exit: { opacity: 0, transition: { duration: 0.3, ease: "easeIn" as const } }
+  },
+  MODAL: {
+    initial: { opacity: 0, scale: 0.95, y: 15, filter: "blur(8px)" },
+    animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.5, ease: EASE_PREMIUM } },
+    exit: { opacity: 0, scale: 0.95, y: 15, filter: "blur(8px)", transition: { duration: 0.3, ease: "easeIn" as const } }
+  },
+  SIDEBAR: {
+    initial: { x: "100%" },
+    animate: { x: 0, transition: { duration: 0.5, ease: EASE_PREMIUM } },
+    exit: { x: "100%", transition: { duration: 0.4, ease: EASE_PREMIUM } }
+  },
+  POPUP: {
+     initial: { opacity: 0, scale: 0.9, y: 20, filter: "blur(4px)" },
+     animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" },
+     exit: { opacity: 0, scale: 0.9, y: 20, filter: "blur(4px)" },
+     transition: { duration: 0.5, ease: EASE_PREMIUM }
+  }
+};
 
 type Language = 'ru' | 'en';
 type Theme = 'light' | 'dark';
@@ -194,18 +223,76 @@ const SectionTitle = ({ children, subtitle, align = "center", dark = false }: { 
   </div>
 );
 
-const Lightbox = ({ images, initialIndex = 0, onClose }: { images: string[], initialIndex?: number, onClose: () => void }) => {
+// --- Before/After Component ---
+
+const BeforeAfter = ({ before, after }: { before: string, after: string }) => {
+  const [sliderPosition, setSliderPosition] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { t } = useLanguage();
+
+  const handleMove = (event: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    let clientX;
+    
+    if ('touches' in event) {
+        clientX = event.touches[0].clientX;
+    } else {
+        clientX = (event as React.MouseEvent).clientX;
+    }
+    
+    let position = ((clientX - containerRect.left) / containerRect.width) * 100;
+    position = Math.min(100, Math.max(0, position));
+    
+    setSliderPosition(position);
+  };
+
+  return (
+      <div 
+        ref={containerRef}
+        className="relative w-full h-full overflow-hidden select-none cursor-ew-resize group rounded-sm shadow-xl bg-gray-200 dark:bg-gray-800"
+        style={{ touchAction: 'none' }}
+        onMouseMove={handleMove}
+        onTouchMove={handleMove}
+        onClick={handleMove}
+      >
+         <img src={after} className="absolute inset-0 w-full h-full object-cover" alt="After" loading="lazy" decoding="async" />
+         <div 
+            className="absolute inset-0 w-full h-full overflow-hidden" 
+            style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+         >
+            <img src={before} className="absolute inset-0 w-full h-full object-cover" alt="Before" loading="lazy" decoding="async" />
+         </div>
+         <div 
+            className="absolute top-0 bottom-0 w-0.5 bg-white cursor-ew-resize shadow-lg z-10"
+            style={{ left: `${sliderPosition}%` }}
+         >
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md">
+                <ArrowUpDown className="w-4 h-4 text-[#1A202C] rotate-90" />
+            </div>
+         </div>
+         <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm text-white px-3 py-1 text-xs rounded-full uppercase tracking-widest pointer-events-none">{t.portfolio.labels.before}</div>
+         <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm text-white px-3 py-1 text-xs rounded-full uppercase tracking-widest pointer-events-none">{t.portfolio.labels.after}</div>
+      </div>
+  );
+};
+
+// --- Updated Lightbox for Before/After ---
+
+const Lightbox = ({ items, initialIndex = 0, onClose }: { items: PortfolioItem[], initialIndex?: number, onClose: () => void }) => {
   const [index, setIndex] = useState(initialIndex);
+  const { t, language } = useLanguage();
   
   const next = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setIndex((prev) => (prev + 1) % images.length);
-  }, [images.length]);
+    setIndex((prev) => (prev + 1) % items.length);
+  }, [items.length]);
 
   const prev = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setIndex((prev) => (prev - 1 + images.length) % images.length);
-  }, [images.length]);
+    setIndex((prev) => (prev - 1 + items.length) % items.length);
+  }, [items.length]);
 
   // Keyboard support
   useEffect(() => {
@@ -217,6 +304,9 @@ const Lightbox = ({ images, initialIndex = 0, onClose }: { images: string[], ini
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [next, prev, onClose]);
+
+  const currentItem = items[index];
+  const hasComparison = currentItem.beforeSrc && currentItem.afterSrc;
 
   return (
     <motion.div 
@@ -232,40 +322,80 @@ const Lightbox = ({ images, initialIndex = 0, onClose }: { images: string[], ini
         <X className="w-8 h-8" />
       </button>
 
-      {/* Main Image Area */}
-      <div className="relative w-full h-full flex items-center justify-center max-h-[85vh]">
-        <button onClick={prev} className="absolute left-2 md:left-8 p-3 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors z-20">
+      {/* Main Content Area */}
+      <div className="relative w-full h-full flex items-center justify-center max-h-[85vh] max-w-6xl">
+        <button onClick={prev} className="absolute left-2 md:-left-12 p-3 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors z-20">
           <ChevronLeft className="w-8 h-8" />
         </button>
         
-        <AnimatePresence mode='wait'>
-            <motion.img 
-                key={index}
-                src={images[index]}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-                className="max-h-full max-w-full object-contain shadow-2xl rounded-sm"
-                alt={`Image ${index + 1}`}
-                onClick={(e) => e.stopPropagation()}
-            />
-        </AnimatePresence>
+        <div className="w-full h-full flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <AnimatePresence mode='wait'>
+                <motion.div 
+                    key={index}
+                    initial={{ opacity: 0, x: 20, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, x: -20, filter: "blur(4px)" }}
+                    transition={{ duration: 0.4, ease: EASE_PREMIUM }}
+                    className="w-full h-full flex flex-col items-center justify-center"
+                >
+                    {hasComparison ? (
+                         // If we have both images, show slider
+                         <div className="w-full h-full max-h-[70vh] aspect-[4/3] md:aspect-[16/9] shadow-2xl">
+                             <BeforeAfter before={currentItem.beforeSrc!} after={currentItem.afterSrc!} />
+                             <div className="mt-4 text-center">
+                                 <p className="text-white/60 text-sm uppercase tracking-widest">{t.portfolio.subtitle}</p>
+                             </div>
+                         </div>
+                    ) : (
+                         // Fallback for orphans
+                         <div className="relative flex flex-col items-center justify-center text-center">
+                             <div className="bg-white/10 p-8 rounded-xl backdrop-blur-sm border border-white/10 mb-6 max-w-md">
+                                 <ImageOff className="w-12 h-12 text-white/50 mx-auto mb-4" />
+                                 <h3 className="text-white text-xl font-serif mb-2">
+                                    {language === 'ru' ? 'Сравнение недоступно' : 'Comparison Not Available'}
+                                 </h3>
+                                 <p className="text-white/60 text-sm">
+                                    {language === 'ru' 
+                                      ? 'Для данного результата пока загружено только одно изображение. Второе фото находится в обработке.' 
+                                      : 'Only one image is available for this result. The second photo is being processed.'}
+                                 </p>
+                             </div>
+                             <img 
+                                src={currentItem.beforeSrc || currentItem.afterSrc} 
+                                className="max-h-[50vh] object-contain rounded-lg opacity-80"
+                                alt="Single result"
+                             />
+                         </div>
+                    )}
+                </motion.div>
+            </AnimatePresence>
+        </div>
 
-        <button onClick={next} className="absolute right-2 md:right-8 p-3 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors z-20">
+        <button onClick={next} className="absolute right-2 md:-right-12 p-3 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors z-20">
           <ChevronRight className="w-8 h-8" />
         </button>
       </div>
 
       {/* Thumbnails */}
       <div className="absolute bottom-4 left-0 right-0 h-20 flex justify-center gap-2 overflow-x-auto px-4 py-2 z-20" onClick={(e) => e.stopPropagation()}>
-         {images.map((src, i) => (
+         {items.map((item, i) => (
              <button 
                 key={i} 
                 onClick={() => setIndex(i)}
                 className={`flex-shrink-0 relative h-full aspect-[4/3] overflow-hidden rounded-sm transition-all ${index === i ? 'ring-2 ring-[#CFB997] opacity-100' : 'opacity-40 hover:opacity-70'}`}
              >
-                 <img src={src} className="w-full h-full object-cover" />
+                 {/* Show 'After' image in thumbnails if available, else 'Before' */}
+                 <img 
+                    src={item.afterSrc || item.beforeSrc} 
+                    className="w-full h-full object-cover" 
+                    loading="lazy" 
+                    alt={`Thumbnail ${i}`}
+                 />
+                 {!item.afterSrc && (
+                     <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                         <ImageOff className="w-4 h-4 text-white" />
+                     </div>
+                 )}
              </button>
          ))}
       </div>
@@ -508,15 +638,16 @@ Keep responses concise and elegant.`,
           <AnimatePresence>
             {isActive && (
                 <motion.div 
-                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    transition={PREMIUM_TRANSITION}
+                    {...ANIMATIONS.POPUP}
                     className="bg-white dark:bg-[#151E32] rounded-2xl shadow-2xl p-6 w-72 md:w-80 border border-gray-200 dark:border-white/10"
                 >
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-2">
-                             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                             <motion.div 
+                                animate={{ opacity: [0.5, 1, 0.5] }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                                className="w-2 h-2 rounded-full bg-red-500" 
+                             />
                              <span className="text-xs font-bold uppercase tracking-widest text-[#006E77] dark:text-[#80DED9]">{t.assistant.start}</span>
                         </div>
                         <button onClick={stop} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-white">
@@ -527,16 +658,37 @@ Keep responses concise and elegant.`,
                     <div className="flex flex-col items-center justify-center py-4">
                         {/* Visualizer */}
                         <div className="relative w-24 h-24 flex items-center justify-center mb-4">
+                             {/* Connecting State */}
+                             {status === 'connecting' && (
+                                <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                    className="absolute inset-0 rounded-full border-2 border-dashed border-[#CFB997]"
+                                />
+                             )}
+
+                             {/* Outer Ripple */}
                              <motion.div 
-                                animate={{ scale: 1 + (volume / 100) * 0.5 }}
-                                className="absolute inset-0 bg-[#CFB997]/20 rounded-full"
+                                animate={{ 
+                                    scale: status === 'connecting' ? 1 : 1 + (Math.max(volume, 5) / 100) * 0.5,
+                                    opacity: status === 'connecting' ? 0.5 : 1
+                                }}
+                                transition={status === 'connecting' ? {} : { type: "spring", stiffness: 300, damping: 20 }}
+                                className={`absolute inset-0 rounded-full ${status === 'connecting' ? 'bg-[#CFB997]/5' : 'bg-[#CFB997]/20'}`}
                              />
+                             
+                             {/* Inner Ripple */}
                              <motion.div 
-                                animate={{ scale: 1 + (volume / 100) * 0.3 }}
-                                className="absolute inset-2 bg-[#CFB997]/40 rounded-full"
+                                animate={{ 
+                                    scale: status === 'connecting' ? 1 : 1 + (Math.max(volume, 5) / 100) * 0.3 
+                                }}
+                                transition={status === 'connecting' ? {} : { type: "spring", stiffness: 300, damping: 20 }}
+                                className={`absolute inset-2 rounded-full ${status === 'connecting' ? 'bg-[#CFB997]/10' : 'bg-[#CFB997]/40'}`}
                              />
-                             <div className="absolute inset-4 bg-gradient-to-br from-[#CFB997] to-[#B7C9CC] rounded-full flex items-center justify-center shadow-inner">
-                                <Mic className="w-8 h-8 text-white" />
+                             
+                             {/* Core Icon */}
+                             <div className={`absolute inset-4 bg-gradient-to-br rounded-full flex items-center justify-center shadow-inner transition-colors duration-500 ${status === 'speaking' ? 'from-[#006E77] to-[#004D53]' : 'from-[#CFB997] to-[#B7C9CC]'}`}>
+                                {status === 'speaking' ? <Volume2 className="w-8 h-8 text-white" /> : <Mic className="w-8 h-8 text-white" />}
                              </div>
                         </div>
                         
@@ -553,1627 +705,40 @@ Keep responses concise and elegant.`,
             )}
           </AnimatePresence>
 
-          <button 
+          <motion.button 
              onClick={toggle}
-             className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 transform hover:scale-105 ${isActive ? 'bg-red-500 text-white' : 'bg-[#006E77] text-white hover:bg-[#CFB997]'}`}
+             whileHover={{ scale: 1.05 }}
+             whileTap={{ scale: 0.95 }}
+             animate={!isActive ? {
+                 boxShadow: [
+                     "0 0 0 0px rgba(0, 110, 119, 0.4)",
+                     "0 0 0 10px rgba(0, 110, 119, 0)",
+                 ],
+             } : {
+                 boxShadow: "0 0 0 0px rgba(0,0,0,0)"
+             }}
+             transition={!isActive ? {
+                 duration: 2,
+                 repeat: Infinity,
+                 ease: "easeInOut"
+             } : {}}
+             className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 transform relative z-[141] ${isActive ? 'bg-red-500 text-white' : 'bg-[#006E77] text-white hover:bg-[#CFB997]'}`}
           >
-              {isActive ? <StopCircle className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-          </button>
+              <AnimatePresence mode="wait">
+                  {isActive ? (
+                    <motion.div key="stop" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0, rotate: 90 }}>
+                        <StopCircle className="w-6 h-6" />
+                    </motion.div>
+                  ) : (
+                    <motion.div key="mic" initial={{ scale: 0, rotate: 90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0, rotate: -90 }}>
+                        <Mic className="w-6 h-6" />
+                    </motion.div>
+                  )}
+              </AnimatePresence>
+          </motion.button>
       </div>
     </>
   );
 };
 
 // --- Custom Cursor Component ---
-
-const CustomCursor = () => {
-  const cursorRef = useRef<HTMLDivElement>(null); // For the main dot
-  const [isHovering, setIsHovering] = useState(false);
-  
-  // Spring animation for the trailing circle
-  const cursorX = useMotionValue(-100);
-  const cursorY = useMotionValue(-100);
-  
-  // Smooth spring configuration
-  const springConfig = { damping: 25, stiffness: 300, mass: 0.5 };
-  const cursorXSpring = useSpring(cursorX, springConfig);
-  const cursorYSpring = useSpring(cursorY, springConfig);
-
-  useEffect(() => {
-    const moveCursor = (e: MouseEvent) => {
-      // Update dot position directly for high performance (no React render loop)
-      if (cursorRef.current) {
-        cursorRef.current.style.transform = `translate3d(${e.clientX - 4}px, ${e.clientY - 4}px, 0)`;
-      }
-      // Update spring target for the trailing circle
-      cursorX.set(e.clientX - 16); // Center 32px circle
-      cursorY.set(e.clientY - 16);
-    };
-
-    const handleMouseOver = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Check if target is interactive
-      const isClickable = 
-        target.tagName === 'BUTTON' || 
-        target.tagName === 'A' || 
-        target.tagName === 'INPUT' || 
-        target.tagName === 'TEXTAREA' || 
-        target.tagName === 'SELECT' ||
-        target.closest('button') || 
-        target.closest('a') ||
-        target.getAttribute('role') === 'button' ||
-        (target.classList && target.classList.contains('cursor-pointer')) ||
-        window.getComputedStyle(target).cursor === 'pointer';
-      
-      setIsHovering(!!isClickable);
-    };
-
-    // Hide default cursor
-    const styleElement = document.createElement('style');
-    styleElement.innerHTML = `
-      @media (min-width: 768px) {
-        body, a, button, input, select, textarea {
-          cursor: none !important;
-        }
-      }
-    `;
-    document.head.appendChild(styleElement);
-
-    window.addEventListener('mousemove', moveCursor);
-    window.addEventListener('mouseover', handleMouseOver);
-
-    return () => {
-      window.removeEventListener('mousemove', moveCursor);
-      window.removeEventListener('mouseover', handleMouseOver);
-      document.head.removeChild(styleElement);
-    };
-  }, [cursorX, cursorY]);
-
-  return (
-    <div className="pointer-events-none fixed inset-0 z-[9999] hidden md:block"> 
-      {/* Main Dot - Instant tracking */}
-      <div 
-        ref={cursorRef}
-        className="fixed top-0 left-0 w-2 h-2 bg-[#CFB997] rounded-full shadow-[0_0_8px_rgba(207,185,151,0.6)] z-50"
-        style={{ willChange: 'transform' }}
-      />
-      
-      {/* Trailing Circle - Spring animation */}
-      <motion.div
-        className="fixed top-0 left-0 w-8 h-8 border border-[#006E77] dark:border-[#80DED9] rounded-full z-40"
-        style={{ 
-          x: cursorXSpring, 
-          y: cursorYSpring,
-        }}
-        animate={{
-          scale: isHovering ? 1.8 : 1,
-          opacity: isHovering ? 0.6 : 0.3,
-          backgroundColor: isHovering ? 'rgba(0, 110, 119, 0.1)' : 'transparent',
-          borderWidth: isHovering ? '1px' : '1px'
-        }}
-        transition={{ type: "tween", ease: "backOut", duration: 0.2 }}
-      />
-    </div>
-  );
-};
-
-// --- Booking Panel Component ---
-
-const BookingPanel = () => {
-  const { isBookingOpen, closeBooking } = useBooking();
-  const { t } = useLanguage();
-  const [formData, setFormData] = useState({
-    operation: '',
-    name: '',
-    email: '',
-    phone: ''
-  });
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('loading');
-
-    const message = `
-<b>✨ Новая заявка с сайта!</b>
-
-👤 <b>Имя:</b> ${formData.name}
-📧 <b>Email:</b> ${formData.email}
-📱 <b>Телефон:</b> ${formData.phone}
-🏥 <b>Операция:</b> ${formData.operation}
-
-💻 <b>Устройство:</b> ${getDeviceString()}
-🔗 <b>UTM:</b> ${getUTMString()}
-    `;
-
-    try {
-      const token = "7875251064:AAEGeusE6fgwkjCrbZFRF4sUEQHeqdpvuEU";
-      const chatId = "@MironovaWebLead"; 
-      
-      const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: 'HTML'
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.ok) {
-        setStatus('success');
-        setTimeout(() => {
-          setStatus('idle');
-          setFormData({ operation: '', name: '', email: '', phone: '' });
-          closeBooking();
-        }, 3000);
-      } else {
-        console.error("Telegram Error:", data);
-        setStatus('error');
-      }
-    } catch (error) {
-      console.error("Network Error:", error);
-      setStatus('error');
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  return (
-    <AnimatePresence>
-      {isBookingOpen && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closeBooking}
-            className="fixed inset-0 bg-[#1A202C]/60 backdrop-blur-sm z-[150]"
-          />
-          <motion.div 
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "tween", ...PREMIUM_TRANSITION }}
-            className="fixed top-0 right-0 h-full w-full md:w-[480px] bg-white dark:bg-[#151E32] z-[160] shadow-2xl flex flex-col"
-          >
-            <div className="p-6 md:p-8 flex justify-end">
-              <button onClick={closeBooking} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors">
-                <X className="w-6 h-6 text-[#1A202C] dark:text-white" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-8 md:px-12 pb-12">
-              <div className="mb-10 text-center">
-                 <div className="w-16 h-16 rounded-full border border-[#006E77] dark:border-[#80DED9] flex items-center justify-center mx-auto mb-6">
-                   <Sparkles className="w-6 h-6 text-[#006E77] dark:text-[#80DED9]" />
-                 </div>
-                 <h2 className="text-3xl font-serif text-[#006E77] dark:text-[#80DED9] mb-2">{t.booking.title}</h2>
-                 <p className="text-[#718096] dark:text-[#CBD5E1] text-sm">{t.booking.subtitle}</p>
-              </div>
-
-              {status === 'success' ? (
-                <div className="text-center py-20">
-                  <motion.div 
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-20 h-20 bg-[#CFB997] rounded-full flex items-center justify-center mx-auto mb-6"
-                  >
-                    <CheckCircle2 className="w-10 h-10 text-white" />
-                  </motion.div>
-                  <h3 className="text-2xl font-serif text-[#1A202C] dark:text-white mb-2">{t.booking.successTitle}</h3>
-                  <p className="text-[#5A6A7A] dark:text-[#94A3B8]">{t.booking.successDesc}</p>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8] mb-2">{t.booking.labels.operation}</label>
-                    <div className="relative">
-                      <select 
-                        required
-                        name="operation"
-                        value={formData.operation}
-                        onChange={handleChange}
-                        className="w-full bg-[#F8F9F9] dark:bg-[#0B1121] border border-gray-200 dark:border-white/10 p-4 text-[#1A202C] dark:text-white appearance-none focus:outline-none focus:border-[#006E77] dark:focus:border-[#80DED9] transition-colors"
-                      >
-                        <option value="" disabled>{t.booking.labels.select}</option>
-                        <option value={t.booking.ops.face}>{t.booking.ops.face}</option>
-                        <option value={t.booking.ops.breast}>{t.booking.ops.breast}</option>
-                        <option value={t.booking.ops.body}>{t.booking.ops.body}</option>
-                      </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8] mb-2">{t.booking.labels.name}</label>
-                    <input 
-                      required
-                      type="text" 
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder={t.booking.labels.name}
-                      className="w-full bg-[#F8F9F9] dark:bg-[#0B1121] border border-gray-200 dark:border-white/10 p-4 text-[#1A202C] dark:text-white focus:outline-none focus:border-[#006E77] dark:focus:border-[#80DED9] transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8] mb-2">{t.booking.labels.email}</label>
-                    <input 
-                      required
-                      type="email" 
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="email@example.com"
-                      className="w-full bg-[#F8F9F9] dark:bg-[#0B1121] border border-gray-200 dark:border-white/10 p-4 text-[#1A202C] dark:text-white focus:outline-none focus:border-[#006E77] dark:focus:border-[#80DED9] transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8] mb-2">{t.booking.labels.phone}</label>
-                    <input 
-                      required
-                      type="tel" 
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="+7 (999) 000-00-00"
-                      className="w-full bg-[#F8F9F9] dark:bg-[#0B1121] border border-gray-200 dark:border-white/10 p-4 text-[#1A202C] dark:text-white focus:outline-none focus:border-[#006E77] dark:focus:border-[#80DED9] transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                    />
-                  </div>
-
-                  <div className="pt-4">
-                    <button 
-                      type="submit"
-                      disabled={status === 'loading'}
-                      className="w-full bg-[#80DED9] hover:bg-[#68C5C0] text-[#004D53] font-medium py-4 px-6 transition-all flex items-center justify-center gap-2"
-                    >
-                      {status === 'loading' ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          {t.booking.labels.sending}
-                        </>
-                      ) : (
-                        t.booking.labels.send
-                      )}
-                    </button>
-                    {status === 'error' && (
-                      <p className="text-red-500 text-xs text-center mt-3">{t.booking.error}</p>
-                    )}
-                  </div>
-                </form>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-};
-
-// --- Doctor Info Modal ---
-
-const DoctorInfoModal = ({ onClose }: { onClose: () => void }) => {
-  const { openBooking } = useBooking();
-  const { t } = useLanguage();
-  const [openSection, setOpenSection] = useState<string | null>("practice");
-
-  const toggle = (id: string) => setOpenSection(openSection === id ? null : id);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
-
-  const accordionItems = useMemo(() => getDoctorAccordionItems(t), [t]);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 overflow-y-auto"
-    >
-      <div className="absolute inset-0 bg-[#1A202C]/80 backdrop-blur-sm" onClick={onClose}></div>
-      
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        transition={PREMIUM_TRANSITION}
-        className="bg-white dark:bg-[#151E32] w-full max-w-6xl md:max-h-[90vh] md:overflow-hidden relative shadow-2xl flex flex-col md:flex-row overflow-y-auto h-full md:h-auto"
-      >
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 flex items-center justify-center transition-colors shadow-sm"
-        >
-          <X className="w-5 h-5 text-[#1A202C] dark:text-white" />
-        </button>
-
-        {/* Left Column: Image */}
-        <div className="w-full md:w-5/12 h-[400px] md:h-auto relative flex-shrink-0">
-          <img 
-            src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-9.jpg" 
-            alt="Миронова Елена" 
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1A202C]/50 to-transparent md:hidden"></div>
-        </div>
-
-        {/* Right Column: Content */}
-        <div className="w-full md:w-7/12 overflow-y-auto">
-          <div className="p-8 md:p-12">
-            
-            {/* Header */}
-            <div className="mb-10">
-               <span className="text-[#006E77] dark:text-[#80DED9] text-xs uppercase tracking-[0.2em] mb-3 block">{t.doctor.tag}</span>
-               <h2 className="text-4xl md:text-5xl mb-4 text-[#1A202C] dark:text-white" style={{ fontFamily: 'Bodoni Moda, serif' }}>
-                 {t.doctor.name}
-               </h2>
-               <p className="text-[#5A6A7A] dark:text-[#94A3B8] text-lg font-light">
-                 {t.doctor.title}
-               </p>
-            </div>
-
-            {/* Accordion */}
-            <div className="mb-12 border-t border-gray-200 dark:border-white/10">
-              {accordionItems.map((item) => (
-                <div key={item.id} className="border-b border-gray-200 dark:border-white/10">
-                  <button 
-                    onClick={() => toggle(item.id)}
-                    className={`w-full py-5 flex items-center justify-between text-left transition-colors ${openSection === item.id ? 'bg-[#006E77]/5 dark:bg-white/5 px-4' : 'hover:bg-gray-50 dark:hover:bg-white/5 px-2'}`}
-                  >
-                    <span className="text-lg font-medium text-[#1A202C] dark:text-white">{item.title}</span>
-                    {openSection === item.id ? <Minus className="w-4 h-4 text-[#006E77] dark:text-[#80DED9]" /> : <Plus className="w-4 h-4 text-[#CFB997]" />}
-                  </button>
-                  <AnimatePresence>
-                    {openSection === item.id && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="px-4 pb-6 pt-2 text-sm leading-relaxed">
-                          {item.content}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
-            <div className="mb-12">
-               <button 
-                  onClick={openBooking}
-                  className="w-full py-5 bg-[#80DED9] hover:bg-[#68C5C0] text-[#004D53] font-medium uppercase tracking-widest text-xs transition-colors shadow-sm"
-               >
-                 {t.doctor.cta}
-               </button>
-            </div>
-
-            {/* Quote/Stats */}
-            <div className="mb-16 border-l-4 border-[#CFB997] pl-6">
-              <h3 className="text-2xl md:text-3xl font-serif text-[#1A202C] dark:text-white leading-snug">
-                {t.doctor.quote}
-              </h3>
-            </div>
-
-            {/* Publications Grid */}
-            <div className="mb-16">
-               <h3 className="text-xl font-serif mb-8 text-[#1A202C] dark:text-white">{t.doctor.sections.publications}</h3>
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="h-16 flex items-end mb-4">
-                      <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/wmc.webp" alt="WIMC" className="max-h-full max-w-full" loading="lazy" />
-                    </div>
-                    <p className="text-xs text-[#5A6A7A] dark:text-[#94A3B8] leading-tight">4-ый международный конкурс учёных WIMC (Варшава 2018 г.)</p>
-                  </div>
-                  <div className="flex flex-col items-center text-center">
-                    <div className="h-16 flex items-end mb-4">
-                      <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/euro.webp" alt="EACMF" className="max-h-full max-w-full" loading="lazy" />
-                    </div>
-                    <p className="text-xs text-[#5A6A7A] dark:text-[#94A3B8] leading-tight">Международный конгресс EACMF</p>
-                  </div>
-                  <div className="flex flex-col items-center text-center">
-                    <div className="h-16 flex items-end mb-4">
-                      <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/est.webp" alt="Esthetic" className="max-h-full max-w-full" loading="lazy" />
-                    </div>
-                    <p className="text-xs text-[#5A6A7A] dark:text-[#94A3B8] leading-tight">Advance-Esthetic (Санкт-Петербург, 2018-2020 гг,)</p>
-                  </div>
-               </div>
-            </div>
-
-            {/* Media Logos */}
-            <div className="flex flex-wrap items-center justify-between gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-               <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/moscow.svg" alt="Evening Moscow" className="h-6 md:h-8 w-auto invert dark:invert-0" loading="lazy" />
-               <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/tatler.svg" alt="Tatler" className="h-6 md:h-8 w-auto invert dark:invert-0" loading="lazy" />
-               <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/news.svg" alt="Izvestia" className="h-6 md:h-8 w-auto invert dark:invert-0" loading="lazy" />
-               <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/people.svg" alt="People Talk" className="h-6 md:h-8 w-auto invert dark:invert-0" loading="lazy" />
-            </div>
-
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
-// --- Modal Component ---
-
-const ServiceModal = ({ data, onClose }: { data: any, onClose: () => void }) => {
-  const { openBooking } = useBooking();
-  const { t } = useLanguage();
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    >
-      <div className="absolute inset-0 bg-[#1A202C]/60 backdrop-blur-sm" onClick={onClose}></div>
-      
-      <motion.div 
-        initial={{ opacity: 0, y: 40, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 40, scale: 0.95 }}
-        transition={PREMIUM_TRANSITION}
-        className="bg-white dark:bg-[#151E32] w-full max-w-4xl max-h-[90vh] overflow-y-auto relative shadow-2xl flex flex-col"
-      >
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 z-10 w-10 h-10 rounded-full border border-gray-200 dark:border-white/10 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-        >
-          <X className="w-5 h-5 text-[#1A202C] dark:text-white" />
-        </button>
-
-        <div className="p-8 md:p-12">
-          <h2 className="text-4xl md:text-5xl mb-6 text-[#1A202C] dark:text-white" style={{ fontFamily: 'Bodoni Moda, serif' }}>
-            {data.title}
-          </h2>
-          
-          <div className="h-px w-24 bg-[#CFB997] mb-8"></div>
-          
-          <p className="text-[#5A6A7A] dark:text-[#94A3B8] text-lg font-light leading-relaxed mb-10 italic font-playfair">
-            {data.intro}
-          </p>
-
-          <div className="mb-12">
-            <h3 className="text-2xl mb-6 font-serif">{t.operations.modal.services}</h3>
-            <div className="space-y-6">
-              {data.services.map((service: any, idx: number) => (
-                <div key={idx}>
-                  <h4 className="font-semibold text-[#1A202C] dark:text-white mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-[#006E77] dark:bg-[#80DED9] rounded-full"></span>
-                    {service.title}
-                  </h4>
-                  <p className="text-[#5A6A7A] dark:text-[#94A3B8] text-sm leading-relaxed pl-3.5 border-l border-[#CFB997]/30">
-                    {service.desc}
-                    {service.subItems && (
-                      <ul className="mt-2 space-y-1">
-                        {service.subItems.map((sub: string, i: number) => (
-                           <li key={i} className="flex items-center gap-2 text-xs">
-                             <span className="w-1 h-1 bg-gray-300 dark:bg-white/30 rounded-full"></span>
-                             {sub}
-                           </li>
-                        ))}
-                      </ul>
-                    )}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-12 bg-[#F8F9F9] dark:bg-[#0B1121] p-8 -mx-8 md:-mx-12 md:px-12">
-            <h3 className="text-2xl mb-8 font-serif">{t.operations.modal.prices}</h3>
-            <div className="space-y-4">
-              {data.prices.map((price: any, idx: number) => (
-                <div key={idx} className="flex items-end justify-between group">
-                  <div className="relative z-10 bg-[#F8F9F9] dark:bg-[#0B1121] pr-4 max-w-[70%]">
-                    <span className="text-base md:text-lg text-[#1A202C] dark:text-white font-light">
-                      {price.name}
-                    </span>
-                  </div>
-                  <div className="flex-grow border-b border-dotted border-[#CFB997] mb-1.5 opacity-50"></div>
-                  <div className="relative z-10 bg-[#F8F9F9] dark:bg-[#0B1121] pl-4 text-right min-w-fit">
-                    <span className="text-lg font-medium text-[#006E77] dark:text-[#80DED9] whitespace-nowrap" style={{ fontFamily: 'Bodoni Moda, serif' }}>
-                      {price.price}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-12">
-            <h3 className="text-2xl mb-6 font-serif">{t.operations.modal.why}</h3>
-            <ul className="space-y-4">
-              {data.benefits.map((benefit: string, idx: number) => (
-                <li key={idx} className="flex items-start gap-3">
-                   <CheckCircle2 className="w-5 h-5 text-[#CFB997] flex-shrink-0 mt-0.5" />
-                   <span className="text-[#5A6A7A] dark:text-[#94A3B8] font-light">{benefit}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="text-center bg-[#F2F0EB] dark:bg-[#0F172A] p-8 rounded-sm">
-            <p className="text-lg italic font-playfair mb-6 text-[#1A202C] dark:text-white">
-              {t.operations.modal.cta}
-            </p>
-            <GoldButton onClick={openBooking}>
-              {t.operations.modal.btn}
-            </GoldButton>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
-// --- Price List & Full Price Modal ---
-
-const FullPriceModal = ({ onClose }: { onClose: () => void }) => {
-  const { language } = useLanguage();
-  const prices = useMemo(() => getPrices(language), [language]);
-  const { t } = useLanguage();
-  
-  // Prevent body scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    >
-       <div className="absolute inset-0 bg-[#1A202C]/60 backdrop-blur-sm" onClick={onClose}></div>
-       <motion.div 
-          initial={{ opacity: 0, y: 40, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 40, scale: 0.95 }}
-          transition={PREMIUM_TRANSITION}
-          className="bg-white dark:bg-[#151E32] w-full max-w-4xl max-h-[90vh] overflow-y-auto relative shadow-2xl rounded-sm p-8 md:p-12"
-       >
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors">
-            <X className="w-6 h-6 text-[#1A202C] dark:text-white" />
-          </button>
-          <h2 className="text-3xl md:text-4xl font-serif text-[#1A202C] dark:text-white mb-8">{t.price.buttons.full}</h2>
-          <div className="space-y-12">
-            {prices.map((cat, idx) => (
-              <div key={idx}>
-                <h3 className="text-xl text-[#006E77] dark:text-[#80DED9] mb-6 font-serif italic border-b border-[#006E77]/10 dark:border-white/10 pb-2 inline-block">
-                  {cat.category}
-                </h3>
-                <div className="space-y-4">
-                  {cat.items.map((item, i) => (
-                    <div key={i} className="flex items-end justify-between">
-                       <div className="relative z-10 bg-white dark:bg-[#151E32] pr-4">
-                          <span className="text-base text-[#1A202C] dark:text-white font-light">{item.name} {item.note && <span className="text-xs text-gray-400"> {item.note}</span>}</span>
-                       </div>
-                       <div className="flex-grow border-b border-dotted border-[#CFB997] mb-1.5 opacity-50"></div>
-                       <div className="relative z-10 bg-white dark:bg-[#151E32] pl-4 text-right">
-                          <span className="text-base font-medium text-[#1A202C] dark:text-white font-serif">{item.price}</span>
-                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-       </motion.div>
-    </motion.div>
-  );
-};
-
-const PriceList = () => {
-  const { t, language } = useLanguage();
-  const { openBooking } = useBooking();
-  const prices = useMemo(() => getPrices(language), [language]);
-  const [showFullPrice, setShowFullPrice] = useState(false);
-
-  return (
-    <section id="price" className="py-32 bg-[#F8F9F9] dark:bg-[#0B1121]">
-      <div className="max-w-[1000px] mx-auto px-6">
-        <SectionTitle subtitle={t.price.subtitle}>{t.price.title}</SectionTitle>
-
-        <div className="space-y-16">
-          {prices.slice(0, 3).map((cat, idx) => (
-            <motion.div 
-              key={idx} 
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-10%" }}
-              transition={{ duration: 0.8, delay: idx * 0.2 }}
-              className="relative"
-            >
-              <h3 className="text-2xl text-[#006E77] dark:text-[#80DED9] mb-8 font-serif italic border-b border-[#006E77]/10 dark:border-white/10 pb-4 inline-block pr-12">
-                {cat.category}
-              </h3>
-              <div className="space-y-6">
-                {cat.items.slice(0, 5).map((item, i) => (
-                  <div key={i} className="flex items-end justify-between group cursor-default">
-                    <div className="relative z-10 bg-[#F8F9F9] dark:bg-[#0B1121] pr-4">
-                      <span className="text-lg md:text-xl text-[#1A202C] dark:text-white group-hover:text-[#006E77] dark:group-hover:text-[#80DED9] transition-colors font-light">
-                        {item.name}
-                      </span>
-                    </div>
-                    <div className="flex-grow border-b border-dotted border-[#CFB997] mb-1.5 opacity-50 relative -ml-2"></div>
-                    <div className="relative z-10 bg-[#F8F9F9] dark:bg-[#0B1121] pl-4 text-right">
-                      <span className="text-lg md:text-xl font-medium text-[#1A202C] dark:text-white" style={{ fontFamily: 'Bodoni Moda, serif' }}>
-                        {item.price}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          ))}
-        </div>
-        
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4, duration: 0.8 }}
-          className="mt-16 text-center"
-        >
-          <p className="text-[#718096] dark:text-[#94A3B8] text-sm mb-6 max-w-xl mx-auto italic">
-            {t.price.disclaimer}
-          </p>
-          <div className="flex justify-center gap-6">
-            <button 
-              onClick={() => setShowFullPrice(true)}
-              className="border-b border-[#006E77] dark:border-[#80DED9] text-[#006E77] dark:text-[#80DED9] hover:text-[#CFB997] hover:border-[#CFB997] transition-all pb-1 text-xs uppercase tracking-[0.2em]"
-            >
-              {t.price.buttons.full}
-            </button>
-            <button 
-              onClick={openBooking}
-              className="border-b border-[#006E77] dark:border-[#80DED9] text-[#006E77] dark:text-[#80DED9] hover:text-[#CFB997] hover:border-[#CFB997] transition-all pb-1 text-xs uppercase tracking-[0.2em]"
-            >
-              {t.price.buttons.calc}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-      
-      <AnimatePresence>
-        {showFullPrice && <FullPriceModal onClose={() => setShowFullPrice(false)} />}
-      </AnimatePresence>
-    </section>
-  );
-};
-
-// --- Operations Component ---
-
-const Operations = () => {
-    const { t } = useLanguage();
-    const [modalData, setModalData] = useState<any | null>(null);
-
-    const operationsData = useMemo(() => getServicesData(t), [t]);
-
-    return (
-        <section id="operations" className="py-32 bg-white dark:bg-[#151E32]">
-            <div className="container mx-auto px-6">
-                <SectionTitle subtitle={t.operations.subtitle}>{t.operations.title}</SectionTitle>
-                <div className="grid md:grid-cols-3 gap-8">
-                    {operationsData.map((op, idx) => (
-                        <motion.div 
-                            key={idx}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: idx * 0.2 }}
-                            className="group cursor-pointer"
-                            onClick={() => setModalData(op)}
-                        >
-                            <div className="relative overflow-hidden aspect-[3/4] mb-6">
-                                <img src={op.image} alt={op.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
-                                <div className="absolute bottom-0 left-0 right-0 p-8">
-                                    <h3 className="text-2xl font-serif text-white mb-2">{op.title}</h3>
-                                    <div className="flex items-center gap-2 text-white/80 text-sm uppercase tracking-widest">
-                                        <span>{t.operations.details}</span>
-                                        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-2" />
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            </div>
-            <AnimatePresence>
-                {modalData && <ServiceModal data={modalData} onClose={() => setModalData(null)} />}
-            </AnimatePresence>
-        </section>
-    );
-};
-
-// --- Portfolio Component ---
-
-const Portfolio = () => {
-    const { t } = useLanguage();
-    const [filter, setFilter] = useState<'all' | 'face' | 'breast' | 'body'>('all');
-    const [lightboxOpen, setLightboxOpen] = useState(false);
-    const [lightboxIndex, setLightboxIndex] = useState(0);
-
-    const portfolioItems = useMemo(() => getPortfolioItems(), []);
-
-    const filteredItems = useMemo(() => {
-        if (filter === 'all') return portfolioItems;
-        return portfolioItems.filter(item => item.category === filter);
-    }, [filter, portfolioItems]);
-    
-    // Map of active images for lightbox
-    const lightboxImages = useMemo(() => filteredItems.map(i => i.src), [filteredItems]);
-
-    return (
-        <section id="portfolio" className="py-32 bg-[#F8F9F9] dark:bg-[#0B1121]">
-            <div className="container mx-auto px-6">
-                <SectionTitle subtitle={t.portfolio.subtitle}>{t.portfolio.title}</SectionTitle>
-                
-                {/* Filter Tabs */}
-                <div className="flex flex-wrap justify-center gap-4 mb-12">
-                   {[
-                     { id: 'all', label: t.portfolio.filters.all },
-                     { id: 'face', label: t.portfolio.filters.face },
-                     { id: 'breast', label: t.portfolio.filters.breast },
-                     { id: 'body', label: t.portfolio.filters.body },
-                   ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setFilter(tab.id as any)}
-                        className={`px-6 py-2 rounded-full text-xs uppercase tracking-widest transition-all duration-300 border
-                          ${filter === tab.id 
-                            ? 'bg-[#006E77] text-white border-[#006E77] shadow-md' 
-                            : 'bg-transparent text-[#5A6A7A] dark:text-[#94A3B8] border-gray-200 dark:border-white/10 hover:border-[#006E77] hover:text-[#006E77]'
-                          }`}
-                      >
-                        {tab.label}
-                      </button>
-                   ))}
-                </div>
-
-                <motion.div 
-                    layout
-                    className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12"
-                >
-                    <AnimatePresence mode='popLayout'>
-                        {filteredItems.map((item, i) => (
-                            <motion.div 
-                                layout
-                                key={item.src}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ duration: 0.3 }}
-                                className="aspect-square relative overflow-hidden group cursor-pointer rounded-sm shadow-sm"
-                                onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
-                            >
-                                <img 
-                                    src={item.src} 
-                                    alt={`Result ${item.category}`} 
-                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                                    loading="lazy" 
-                                />
-                                <div className="absolute inset-0 bg-[#006E77]/0 group-hover:bg-[#006E77]/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                    <div className="bg-white/90 p-3 rounded-full shadow-lg transform scale-0 group-hover:scale-100 transition-transform duration-300">
-                                        <Plus className="w-6 h-6 text-[#006E77]" />
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-                </motion.div>
-                
-                <div className="text-center">
-                   <p className="text-xs text-gray-400 dark:text-gray-600 mb-4 uppercase tracking-widest">
-                       {filteredItems.length} {filter === 'all' ? 'Всего' : 'в категории'}
-                   </p>
-                </div>
-            </div>
-            <AnimatePresence>
-                {lightboxOpen && (
-                    <Lightbox 
-                        images={lightboxImages} 
-                        initialIndex={lightboxIndex} 
-                        onClose={() => setLightboxOpen(false)} 
-                    />
-                )}
-            </AnimatePresence>
-        </section>
-    );
-}
-
-// --- About Component ---
-
-const About = () => {
-    const { t } = useLanguage();
-    const [modalOpen, setModalOpen] = useState(false);
-
-    return (
-        <section id="about" className="py-32 bg-white dark:bg-[#151E32] overflow-hidden">
-            <div className="container mx-auto px-6">
-                <div className="flex flex-col md:flex-row items-center gap-16">
-                        <motion.div 
-                        initial={{ opacity: 0, x: -50 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        className="w-full md:w-1/2"
-                        >
-                            <div className="relative">
-                                <img src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-9.jpg" alt="Dr. Mironova" className="w-full max-w-md mx-auto shadow-2xl" loading="lazy" />
-                                <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-[#F8F9F9] dark:bg-[#0B1121] -z-10 rounded-full blur-3xl opacity-50"></div>
-                            </div>
-                        </motion.div>
-                        <motion.div 
-                        initial={{ opacity: 0, x: 50 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        className="w-full md:w-1/2"
-                        >
-                        <SectionTitle align="left" subtitle={t.doctor.tag}>{t.doctor.name}</SectionTitle>
-                        <h3 className="text-xl text-[#006E77] dark:text-[#80DED9] mb-6">{t.doctor.title}</h3>
-                        <p className="text-lg italic text-[#5A6A7A] dark:text-[#94A3B8] mb-8 border-l-4 border-[#CFB997] pl-6 py-2">
-                            {t.about.quote1}
-                        </p>
-                        <div className="flex gap-8 mb-10">
-                            <div>
-                                <p className="text-4xl font-serif text-[#1A202C] dark:text-white mb-1">15+</p>
-                                <p className="text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8]">{t.about.exp}</p>
-                            </div>
-                            <div>
-                                <p className="text-4xl font-serif text-[#1A202C] dark:text-white mb-1">3000+</p>
-                                <p className="text-xs uppercase tracking-widest text-[#718096] dark:text-[#94A3B8]">{t.about.stats.ops}</p>
-                            </div>
-                        </div>
-                        <GoldButton onClick={() => setModalOpen(true)}>{t.about.buttons.more}</GoldButton>
-                        </motion.div>
-                </div>
-            </div>
-            <AnimatePresence>
-                {modalOpen && <DoctorInfoModal onClose={() => setModalOpen(false)} />}
-            </AnimatePresence>
-        </section>
-    );
-}
-
-// --- Legal Modal & Tabs ---
-
-const LegalModal = ({ onClose }: { onClose: () => void }) => {
-  const [activeTab, setActiveTab] = useState(0);
-  
-  const tabs = [
-    { title: "Оферта: Организация лечения", icon: FileText },
-    { title: "Оферта: Консультация", icon: FileText },
-    { title: "Оферта: Организация очной консультации", icon: FileText },
-    { title: "Оплата услуг", icon: CreditCard },
-    { title: "Оказание услуг", icon: Truck },
-    { title: "Соглашение на обработку персональных данных", icon: ShieldAlert },
-    { title: "Отмена и возврат", icon: Undo2 }
-  ];
-
-  const OfferTemplate = ({ serviceName, price, terms }: { serviceName: string, price: string, terms: React.ReactNode }) => (
-    <div className="space-y-6 text-sm text-[#1A202C] dark:text-white leading-relaxed font-sans">
-        <h1 className="text-2xl font-serif text-center mb-6">Счет-оферта</h1>
-
-        {/* Bank Details Table */}
-        <div className="overflow-x-auto mb-6">
-            <table className="w-full border-collapse border border-gray-300 text-[10px] md:text-xs bg-white dark:bg-[#151E32]">
-                <tbody>
-                    <tr>
-                        <td colSpan={2} rowSpan={2} className="border border-gray-300 p-2 align-top">Банк получателя: ___________________________</td>
-                        <td className="border border-gray-300 p-2">БИК</td>
-                        <td className="border border-gray-300 p-2">________________</td>
-                    </tr>
-                    <tr>
-                        <td className="border border-gray-300 p-2">К/с банка</td>
-                        <td className="border border-gray-300 p-2">________________</td>
-                    </tr>
-                    <tr>
-                        <td className="border border-gray-300 p-2">ИНН 772794015348</td>
-                        <td className="border border-gray-300 p-2">Счет получателя</td>
-                        <td colSpan={2} className="border border-gray-300 p-2">________________</td>
-                    </tr>
-                    <tr>
-                        <td colSpan={4} className="border border-gray-300 p-2">Получатель: ИП Миронова Елена Александровна</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div className="mb-4 text-xs">
-            <p className="mb-2"><strong>Исполнитель:</strong> Индивидуальный предприниматель Миронова Елена Александровна (ОГРНИП 325774600642997)</p>
-            <p><strong>Заказчик/Потребитель:</strong> Настоящий счет-оферта в соответствии с положениями ст. 435 ГК РФ является офертой и адресован любому лицу, являющемуся резидентом РФ, которое акцептует ее условия.</p>
-        </div>
-
-        <p className="text-xs">В соответствии с настоящим Счетом-офертой Исполнитель обязуется предоставить Заказчику услуги, а Заказчик/Потребитель принять и оплатить их:</p>
-
-        {/* Service Table */}
-        <div className="overflow-x-auto mb-6">
-            <table className="w-full border-collapse border border-gray-300 text-[10px] md:text-xs bg-white dark:bg-[#151E32]">
-                <thead>
-                    <tr className="bg-gray-50 dark:bg-white/5">
-                        <th className="border border-gray-300 p-2 text-left font-bold">N п/п</th>
-                        <th className="border border-gray-300 p-2 text-left font-bold">Наименование услуги</th>
-                        <th className="border border-gray-300 p-2 text-left font-bold">Кол-во</th>
-                        <th className="border border-gray-300 p-2 text-left font-bold">Ед.</th>
-                        <th className="border border-gray-300 p-2 text-left font-bold">Цена, руб.</th>
-                        <th className="border border-gray-300 p-2 text-left font-bold">Стоимость, руб.</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td className="border border-gray-300 p-2">1</td>
-                        <td className="border border-gray-300 p-2">{serviceName}</td>
-                        <td className="border border-gray-300 p-2">1</td>
-                        <td className="border border-gray-300 p-2">шт.</td>
-                        <td className="border border-gray-300 p-2">{price}</td>
-                        <td className="border border-gray-300 p-2">{price}</td>
-                    </tr>
-                    <tr>
-                        <td colSpan={5} className="border border-gray-300 p-2 text-right font-bold">Итого:</td>
-                        <td className="border border-gray-300 p-2 font-bold">{price}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <p className="font-bold text-sm mb-6">Итого к оплате: {price} рублей 00 копеек.</p>
-
-        <div className="text-xs space-y-3 opacity-90 leading-relaxed">
-            {terms}
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-white/10 flex flex-wrap justify-between gap-8 text-xs">
-            <div className="w-full md:w-[45%]">
-                <p><strong>Сведения об Исполнителе:</strong><br/>
-                Индивидуальный предприниматель<br/>
-                Миронова Елена Александровна<br/>
-                ОГРНИП 325774600642997<br/>
-                ИНН 772794015348<br/>
-                e-mail: doc-mironova.ru@yandex.ru<br/>
-                Тел.: +7 985-728-51-02</p>
-            </div>
-            <div className="w-full md:w-[45%]">
-                <p><strong>Банковские реквизиты:</strong><br/>
-                Получатель: ИП Миронова Е.А.<br/>
-                р/с ___________________________<br/>
-                к/с ___________________________<br/>
-                ИНН __________________________<br/>
-                БИК __________________________</p>
-            </div>
-        </div>
-        
-        <div className="mt-8 font-bold border-t border-dashed border-gray-300 pt-4 inline-block pr-20">
-            ИП Миронова Е.А.
-        </div>
-    </div>
-  );
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 0: return (
-        <OfferTemplate 
-            serviceName="Сервисно-информационное обслуживание Заказчика по организации хирургического лечения Заказчика в медицинской организации"
-            price="50 000,00"
-            terms={
-                <>
-                    <p>В рамках оказания Услуг Исполнитель обязуется предоставить Заказчику/Потребителю информацию о возможности и порядке записи на операцию, объеме догоспитальных исследований и особенностях подготовки и послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения, забронировать дату и время операционной для оказания медицинской помощи Заказчику/ Потребителю, при необходимости разрешить вопрос о привлечении дополнительного медицинского персонала.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает, что Исполнитель уведомил его о том, что на внесенную им сумму денежных средств Исполнитель, в том числе, закупает расходный материал, необходимый для выполнения показанной и согласованной операции, и выполняет иные действия для последующего оказания Заказчику/ Потребителю медицинских услуг.</p>
-                    <p>К фактически понесенным расходам Исполнителя относятся, включая, но не ограничиваясь: приобретение изделий медицинского назначения, расходного материала (медикаментов, компрессионного белья, компрессионных чулок и др.), бронирование операционной и палаты, привлечение специалистов, заказ питания и т.д. в целях оказания медицинских услуг Заказчику/Потребителю.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Уплаченная Заказчиком/Потребителем денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика/Потребителя от получения услуг в соответствии со ст. 782 ГК РФ.</li>
-                        <li>Исполнитель уведомил Заказчика/Потребителя о том, что в случае, если фактически понесенные Исполнителем расходы превышают сумму внесенных им денежных средств, Исполнитель не взыскивает какую-либо доплату.</li>
-                        <li>Заказчик/Потребитель разрешает Исполнителю получать доступ к сведениям, составляющим врачебную тайну, и персональным данным, без которых невозможно последующее оказание медицинских услуг.</li>
-                    </ul>
-                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик/Потребитель в полном объеме произведет оплату в срок до 5 (пяти) дней сумму, указанную в таблице, по реквизитам расчетного счета Исполнителя.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает, что согласен со всеми его условиями.</p>
-                    <p>Заказчик/Потребитель соглашается, что возврат денежных средств возможен <strong>ИСКЛЮЧИТЕЛЬНО</strong> в следующих случаях:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>состояние здоровья Потребителя не позволяет выполнить операцию в срок более, чем 6 месяцев;</li>
-                        <li>Исполнитель отказывается от обязанностей лечащего врача медицинской организации, с которой будет заключен договор, в связи с неустановившимся терапевтическим сотрудничеством.</li>
-                    </ul>
-                    <p>Исполнитель уведомил Заказчика/Потребителя о том, что срок возврата денежных средств в указанных случаях составляет 10 (десять) календарных дней.</p>
-                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
-                </>
-            }
-        />
-      );
-      case 1: return (
-        <OfferTemplate 
-            serviceName="Сервисно-информационная консультация перед началом получения медицинской помощи в медицинской организации («Услуга»)"
-            price="5 000,00"
-            terms={
-                <>
-                    <p>Исполнитель в порядке и на условиях, предусмотренных настоящим Счетом-офертой, оказывает Заказчику Услуги, а Заказчик обязуется оплатить эти Услуги в порядке, сроки и на условиях, предусмотренных настоящим Счетом-офертой.</p>
-                    <p>В рамках консультации Исполнитель обязуется предоставить Заказчику информацию о возможности записи на консультацию врача в клинику с согласованием даты и времени, предоставить ему информацию об объемах догоспитальных исследований и особенностях послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения.</p>
-                    <p>Стороны подтверждают, что данная консультация не является медицинской услугой.</p>
-                    <p>Заказчик уведомлен о том, что консультация в рамках настоящего Счета-оферты не является обязательным условием для начала лечения, заказчик имеет возможность заключить договор с медицинской организацией самостоятельно.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик подтверждает, что разрешает Исполнителю получать доступ к сведениям, составляющим его врачебную тайну.</p>
-                    <p>Стороны договорились, что в связи с оказанием услуг посредством телекоммуникации, сканы всех документов приравниваются по силе к оригиналам, а электронная почта и мессенджеры (WhatsApp, Telegram и т.д.) являются надлежащими каналами связи. Акцептируя настоящий Счет-оферту, Заказчик берет на себя ответственность за сохранение врачебной тайны при переписке путем использования электронной почты и мессенджеров.</p>
-                    <p>Вся предоставляемая сторонами друг другу информация является конфиденциальной.</p>
-                    <p>Услуги оказываются Исполнителем дистанционно через сеть Интернет и/или очно.</p>
-                    <p>Услуги, оказываемые по настоящему Счету-оферте, оплачиваются в размере 100% предоплаты.</p>
-                    <p>Исполнитель оказывает Услуги после получения от Заказчика заявки и предоплаты. Заявка оформляется по телефону Исполнителя: +7 985-728-51-02 либо на Сайте Исполнителя https://doc-mironova.ru.</p>
-                    <p>Исполнитель обязуется оказать Заказчику Услуги в срок, не превышающий 30 (тридцати) календарных дней со дня получения от Заказчика полной оплаты по настоящему Счетом-оферте. Исполнитель вправе выполнить свои обязательства досрочно.</p>
-                    <p>Настоящий Счет-оферта имеет силу акта об оказании услуг. Приемка производится без подписания соответствующего акта.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Уплаченная денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика от получения услуг (ст. 782 ГК РФ).</li>
-                        <li>Если фактически понесенные расходы превышают сумму внесенных средств, Исполнитель не взыскивает доплату.</li>
-                    </ul>
-                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик произведет оплату суммы в полном объеме.</p>
-                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
-                </>
-            }
-        />
-      );
-      case 2: return (
-        <OfferTemplate 
-            serviceName="Сервисно-информационная консультация перед началом получения медицинской помощи в медицинской организации («Услуга»)"
-            price="5 000,00"
-            terms={
-                <>
-                    <p>Исполнитель в порядке и на условиях, предусмотренных настоящим Счетом-офертой, оказывает Заказчику Услуги, а Заказчик обязуется оплатить эти Услуги в порядке, сроки и на условиях, предусмотренных настоящим Счетом-офертой.</p>
-                    <p>В рамках консультации Исполнитель обязуется предоставить Заказчику информацию о возможности записи на консультацию врача в клинику с согласованием даты и времени, предоставить ему информацию об объемах догоспитальных исследований и особенностях послеоперационного периода, ответить на вопросы о существующих в научной и клинической литературе методах обследования и лечения.</p>
-                    <p>Стороны подтверждают, что данная консультация не является медицинской услугой.</p>
-                    <p>Заказчик уведомлен о том, что консультация в рамках настоящего Счета-оферты не является обязательным условием для начала лечения, заказчик имеет возможность заключить договор с медицинской организацией самостоятельно.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик подтверждает, что разрешает Исполнителю получать доступ к сведениям, составляющим его врачебную тайну.</p>
-                    <p>Стороны договорились, что в связи с оказанием услуг посредством телекоммуникации, сканы всех документов приравниваются по силе к оригиналам, а электронная почта и мессенджеры (WhatsApp, Telegram и т.д.) являются надлежащими каналами связи. Акцептируя настоящий Счет-оферту, Заказчик берет на себя ответственность за сохранение врачебной тайны при переписке путем использования электронной почты и мессенджеров.</p>
-                    <p>Вся предоставляемая сторонами друг другу информация является конфиденциальной.</p>
-                    <p>Услуги оказываются Исполнителем дистанционно через сеть Интернет и/или очно.</p>
-                    <p>Услуги, оказываемые по настоящему Счету-оферте, оплачиваются в размере 100% предоплаты.</p>
-                    <p>Исполнитель оказывает Услуги после получения от Заказчика заявки и предоплаты. Заявка оформляется по телефону Исполнителя: +7 985-728-51-02 либо на Сайте Исполнителя https://doc-mironova.ru.</p>
-                    <p>Исполнитель обязуется оказать Заказчику Услуги в срок, не превышающий 30 (тридцати) календарных дней со дня получения от Заказчика полной оплаты по настоящему Счетом-оферте. Исполнитель вправе выполнить свои обязательства досрочно.</p>
-                    <p>Настоящий Счет-оферта имеет силу акта об оказании услуг. Приемка производится без подписания соответствующего акта.</p>
-                    <p>Оплатой настоящего Счета-оферты Заказчик/Потребитель подтверждает свою осведомленность и согласен с тем, что:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>Уплаченная денежная сумма засчитывается в счет понесенных Исполнителем расходов, ввиду чего не подлежит возврату в случае отказа Заказчика от получения услуг (ст. 782 ГК РФ).</li>
-                        <li>Если фактически понесенные расходы превышают сумму внесенных средств, Исполнитель не взыскивает доплату.</li>
-                    </ul>
-                    <p>В соответствии с п. 3 ст. 438 ГК РФ настоящий Счет-оферта считается заключенным, если Заказчик произведет оплату суммы в полном объеме.</p>
-                    <p>Заказчик/Потребитель осведомлен, что оказание медицинских услуг регулируется отдельным договором с медицинской организацией, который заключается в день госпитализации.</p>
-                </>
-            }
-        />
-      );
-      case 3: return (
-        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
-            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Оплата услуг</h2>
-            <p>Для вашего удобства мы поддерживаем современные способы онлайн-оплаты. Принимаются карты систем:</p>
-            <div className="flex gap-6 items-center my-6">
-                <span className="text-2xl font-bold text-[#1a1f71]">VISA</span>
-                <span className="text-2xl font-bold text-[#eb001b]">MasterCard</span>
-                <span className="text-2xl font-bold text-[#00b140]">МИР</span>
-            </div>
-            <p>Процесс оплаты максимально прост: при оформлении заказа на сайте вы будете перенаправлены на защищенную платёжную страницу банка для ввода данных карты:</p>
-            <ul className="list-disc pl-5 space-y-2">
-                <li>Номер карты (16 цифр);</li>
-                <li>Срок действия (месяц/год);</li>
-                <li>Код безопасности CVC2/CVV2.</li>
-            </ul>
-            <p>Безопасность транзакций обеспечивается технологией <strong>3D-Secure</strong> (подтверждение через СМС-код от вашего банка).</p>
-            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mt-4">
-                <strong>Безопасность:</strong> Все платежи обрабатываются через защищенный шлюз по международному стандарту PCI DSS. Данные передаются в зашифрованном виде (SSL) и не сохраняются на нашем сервере.
-            </div>
-        </div>
-      );
-      case 4: return (
-        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
-            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Формат и сроки оказания услуг</h2>
-            <p>ИП Миронова Е.А. предоставляет сервисно-информационное обслуживание. Физическая доставка товаров не предусмотрена.</p>
-            <ul className="list-disc pl-5 space-y-3">
-                <li><strong>Дистанционно:</strong> Консультации проводятся онлайн (Zoom, WhatsApp, Telegram, Телефон) для жителей всех регионов РФ.</li>
-                <li><strong>Очно:</strong> По предварительной записи в партнерских клиниках г. Москвы.</li>
-                <li><strong>Сроки:</strong> Информационная поддержка и организация записи осуществляются в течение времени, указанного в вашем Счете-оферте (обычно до 30 дней).</li>
-            </ul>
-        </div>
-      );
-      case 5: return (
-        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
-            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Персональные данные</h2>
-            <p>Мы соблюдаем <strong>ФЗ-152 «О персональных данных»</strong>. Ваши данные (ФИО, контакты, история обращений) используются только для качественного оказания услуг и не передаются третьим лицам без вашего согласия.</p>
-            <p>На сайте используются файлы <strong>cookies</strong> для анализа посещаемости и улучшения интерфейса. Оставаясь на сайте, вы соглашаетесь с нашей политикой конфиденциальности.</p>
-        </div>
-      );
-      case 6: return (
-        <div className="space-y-6 text-sm text-[#1A202C] dark:text-white">
-            <h2 className="text-2xl font-serif mb-4 text-[#006E77] dark:text-[#80DED9]">Отмена и возврат</h2>
-            <p>Мы работаем строго в рамках законодательства РФ (Закон «О защите прав потребителей»):</p>
-            <ul className="list-disc pl-5 space-y-3">
-                <li>Вы вправе отказаться от услуг в любое время, возместив Исполнителю фактически понесенные расходы (бронирование времени, закупка материалов, если это предусмотрено офертой).</li>
-                <li>В случае обоснованных претензий к качеству мы обязуемся устранить недостатки в кратчайшие сроки.</li>
-            </ul>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 mt-6">
-                <strong>Порядок возврата:</strong> Денежные средства возвращаются на ту же банковскую карту, с которой производилась оплата. Срок зачисления средств составляет от 1 до 30 рабочих дней (зависит от вашего банка).
-            </div>
-        </div>
-      );
-      default: return null;
-    }
-  };
-
-  // Prevent background scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 md:p-6"
-    >
-      <div className="absolute inset-0" onClick={onClose}></div>
-      <motion.div 
-        initial={{ y: 40, opacity: 0, scale: 0.95 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 40, opacity: 0, scale: 0.95 }}
-        transition={PREMIUM_TRANSITION}
-        className="bg-white dark:bg-[#151E32] w-full max-w-6xl h-full md:h-[90vh] md:rounded-xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden"
-      >
-        <button onClick={onClose} className="absolute top-4 right-4 md:hidden z-50 p-2 bg-gray-100 rounded-full">
-            <X className="w-5 h-5 text-black" />
-        </button>
-
-        {/* Sidebar */}
-        <div className="w-full md:w-1/4 bg-gray-50 dark:bg-[#0B1121] border-r border-gray-200 dark:border-white/10 flex flex-col">
-            <div className="p-6 border-b border-gray-200 dark:border-white/10 hidden md:block">
-                <h3 className="font-serif text-lg text-[#006E77] dark:text-[#80DED9]">Документация</h3>
-                <p className="text-xs text-gray-500 mt-1">Официальная информация</p>
-            </div>
-            
-            {/* Scrollable tabs list */}
-            <div className="flex-1 overflow-x-auto md:overflow-y-auto flex md:flex-col p-2 gap-1">
-                {tabs.map((tab, idx) => {
-                    const Icon = tab.icon;
-                    return (
-                        <button 
-                            key={idx}
-                            onClick={() => setActiveTab(idx)}
-                            className={`flex items-center gap-3 p-3 text-left rounded-lg transition-all text-xs md:text-sm whitespace-nowrap md:whitespace-normal
-                                ${activeTab === idx 
-                                    ? 'bg-white dark:bg-white/10 shadow-sm text-[#006E77] dark:text-[#80DED9] font-medium border border-gray-200 dark:border-transparent' 
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}
-                        >
-                            <Icon className={`w-4 h-4 flex-shrink-0 ${activeTab === idx ? 'text-[#CFB997]' : 'opacity-50'}`} />
-                            <span>{tab.title}</span>
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#151E32]">
-            <button onClick={onClose} className="absolute top-6 right-6 hidden md:block p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors">
-                <X className="w-6 h-6 text-[#1A202C] dark:text-white" />
-            </button>
-            
-            <div className="flex-1 overflow-y-auto p-6 md:p-12">
-                {renderContent()}
-            </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
-// --- Navbar Component ---
-
-const Navbar = () => {
-    const { t, language, setLanguage } = useLanguage();
-    const { theme, toggleTheme } = useTheme();
-    const { openBooking } = useBooking();
-    const [scrolled, setScrolled] = useState(false);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
-    useEffect(() => {
-      const handleScroll = () => setScrolled(window.scrollY > 50);
-      window.addEventListener('scroll', handleScroll);
-      return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-  
-    const navLinks = [
-      { href: '#operations', label: t.nav.operations },
-      { href: '#portfolio', label: t.nav.portfolio },
-      { href: '#price', label: t.nav.prices },
-      { href: '#about', label: t.nav.about },
-      { href: '#contacts', label: t.nav.contacts },
-    ];
-  
-    return (
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 dark:bg-[#151E32]/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`}>
-        <div className="max-w-[1800px] mx-auto px-6 flex items-center justify-between">
-          <a href="#" className="text-2xl font-serif font-bold text-[#1A202C] dark:text-white">Dr. Mironova</a>
-          
-          <div className="hidden md:flex items-center gap-8">
-            {navLinks.map(link => (
-              <a key={link.href} href={link.href} className="text-sm uppercase tracking-widest text-[#1A202C] dark:text-white hover:text-[#006E77] dark:hover:text-[#80DED9] transition-colors">{link.label}</a>
-            ))}
-          </div>
-  
-          <div className="hidden md:flex items-center gap-6">
-             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-[#1A202C] dark:text-white transition-colors">
-                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-             </button>
-             <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-sm font-medium uppercase text-[#1A202C] dark:text-white hover:text-[#006E77] dark:hover:text-[#80DED9] transition-colors">
-                {language}
-             </button>
-             <GoldButton onClick={openBooking}>{t.nav.book}</GoldButton>
-          </div>
-  
-          <button className="md:hidden text-[#1A202C] dark:text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-  
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-              <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="md:hidden bg-white dark:bg-[#151E32] border-t border-gray-100 dark:border-white/10 overflow-hidden"
-              >
-                  <div className="flex flex-col p-6 gap-4">
-                      {navLinks.map(link => (
-                          <a key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="text-lg font-medium text-[#1A202C] dark:text-white py-2">{link.label}</a>
-                      ))}
-                      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-white/10">
-                          <button onClick={toggleTheme} className="p-2 rounded-full bg-gray-100 dark:bg-white/10 text-[#1A202C] dark:text-white">
-                              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                          </button>
-                          <button onClick={() => setLanguage(language === 'ru' ? 'en' : 'ru')} className="text-sm font-bold uppercase text-[#1A202C] dark:text-white p-2 border border-gray-200 dark:border-white/20 rounded-md">
-                              {language}
-                          </button>
-                      </div>
-                      <GoldButton onClick={() => { setMobileMenuOpen(false); openBooking(); }} className="w-full justify-center mt-2">{t.nav.book}</GoldButton>
-                  </div>
-              </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
-    );
-  }
-  
-// --- Hero Component ---
-
-const Hero = () => {
-    const { t } = useLanguage();
-    const { openBooking } = useBooking();
-    const lenis = useSmoothScroll();
-
-    return (
-        <section id="hero" className="relative min-h-screen flex items-center pt-20 overflow-hidden">
-            {/* Background Image */}
-            <div className="absolute inset-0 z-0">
-                <picture>
-                    <source media="(max-width: 768px)" srcSet="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-mob-7.jpg" />
-                    <img 
-                        src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/emir-hd-7-1.jpg" 
-                        alt="Dr. Elena Mironova" 
-                        className="w-full h-full object-cover object-top md:object-center" 
-                    />
-                </picture>
-                <div className="absolute inset-0 bg-white/10 dark:bg-black/20 mix-blend-overlay"></div>
-                <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/70 to-transparent dark:from-[#0B1121] dark:via-[#0B1121]/80 dark:to-transparent/20"></div>
-            </div>
-
-            <div className="container mx-auto px-6 relative z-10 grid md:grid-cols-2 gap-12 items-center">
-                <motion.div 
-                    initial={{ opacity: 0, x: -50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 1 }}
-                >
-                    <span className="inline-block py-1 px-3 border border-[#006E77] text-[#006E77] dark:border-[#80DED9] dark:text-[#80DED9] text-xs uppercase tracking-[0.2em] mb-6 rounded-full bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-sm">
-                        {t.hero.tag}
-                    </span>
-                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif leading-tight text-[#1A202C] dark:text-white mb-8 drop-shadow-sm">
-                        <span className="block">{t.hero.title1}</span>
-                        <span className="block italic text-[#CFB997]">{t.hero.title2}</span>
-                        <span className="block">{t.hero.title3}</span>
-                    </h1>
-                    <p className="text-lg text-[#5A6A7A] dark:text-[#CBD5E1] max-w-md mb-10 leading-relaxed font-medium">
-                        {t.hero.desc}
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <GoldButton onClick={openBooking}>{t.hero.cost}</GoldButton>
-                        <GoldButton variant="outline" onClick={() => lenis ? lenis.scrollTo('#portfolio') : document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' })}>
-                            {t.hero.portfolio}
-                        </GoldButton>
-                    </div>
-                </motion.div>
-            </div>
-
-            <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 2, duration: 1 }}
-                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#1A202C] dark:text-white"
-            >
-                <span className="text-[10px] uppercase tracking-widest opacity-60">{t.hero.scroll}</span>
-                <motion.div 
-                    animate={{ y: [0, 10, 0] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                >
-                    <ChevronDown className="w-5 h-5 opacity-60" />
-                </motion.div>
-            </motion.div>
-        </section>
-    );
-}
-
-// --- Footer Section ---
-
-const Footer = () => {
-  const { t } = useLanguage();
-  const [legalModalOpen, setLegalModalOpen] = useState(false);
-
-  return (
-    <>
-    <footer id="contacts" className="bg-[#1A202C] text-white py-20 border-t border-white/5">
-       <div className="max-w-[1800px] mx-auto px-6 grid md:grid-cols-4 gap-12">
-         <div>
-           <h3 className="text-2xl font-serif mb-6 tracking-wide">Dr. Mironova</h3>
-           <p className="text-gray-400 text-sm mb-6 font-light">{t.footer.address}</p>
-           <div className="flex gap-4">
-             <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-               <Instagram className="w-5 h-5 text-white/80" />
-             </a>
-             <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-               <Youtube className="w-5 h-5 text-white/80" />
-             </a>
-           </div>
-         </div>
-         
-         <div>
-           <h4 className="uppercase tracking-widest text-xs font-bold mb-8 text-[#CFB997]">{t.footer.menu}</h4>
-           <ul className="space-y-4 text-gray-400 text-sm font-light">
-              <li><a href="#operations" className="hover:text-white transition-colors">{t.nav.operations}</a></li>
-              <li><a href="#portfolio" className="hover:text-white transition-colors">{t.nav.portfolio}</a></li>
-              <li><a href="#price" className="hover:text-white transition-colors">{t.nav.prices}</a></li>
-              <li><a href="#about" className="hover:text-white transition-colors">{t.nav.about}</a></li>
-           </ul>
-         </div>
-         
-         <div>
-           <h4 className="uppercase tracking-widest text-xs font-bold mb-8 text-[#CFB997]">{t.footer.contacts}</h4>
-           <ul className="space-y-4 text-gray-400 text-sm font-light">
-              <li className="flex items-center gap-3"><Phone className="w-4 h-4" /> +7 (999) 000-00-00</li>
-              <li className="flex items-center gap-3"><MapPin className="w-4 h-4" /> Москва, Пресненская наб., 12</li>
-              <li className="flex items-center gap-3"><Clock className="w-4 h-4" /> {t.footer.work_hours}</li>
-           </ul>
-         </div>
-         
-         <div>
-            <button 
-                onClick={() => setLegalModalOpen(true)}
-                className="w-full py-4 border border-white/20 hover:bg-white hover:text-[#1A202C] transition-all text-xs uppercase tracking-widest font-medium"
-            >
-              {t.footer.callback}
-            </button>
-         </div>
-       </div>
-       
-       <div className="max-w-[1800px] mx-auto px-6 mt-20 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between text-xs text-gray-500 font-light">
-         <span>© 2024 Dr. Elena Mironova. {t.footer.rights}</span>
-         <div className="flex gap-8 mt-4 md:mt-0">
-           <button 
-             onClick={() => setLegalModalOpen(true)}
-             className="hover:text-white transition-colors border-b border-transparent hover:border-white/50 pb-0.5"
-           >
-             Соглашения и оплата
-           </button>
-         </div>
-       </div>
-    </footer>
-    <AnimatePresence>
-      {legalModalOpen && <LegalModal onClose={() => setLegalModalOpen(false)} />}
-    </AnimatePresence>
-    </>
-  )
-};
-
-// --- Preloader Component ---
-
-const Preloader = ({ onComplete }: { onComplete: () => void }) => {
-  useEffect(() => {
-    const timer = setTimeout(onComplete, 2500);
-    return () => clearTimeout(timer);
-  }, [onComplete]);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.8, ease: "easeInOut" }}
-      className="fixed inset-0 z-[999] flex items-center justify-center bg-[#Fdfbf7]"
-    >
-      <div 
-        className="absolute inset-0 z-0 opacity-100"
-        style={{
-            backgroundImage: 'url(https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/texture-papper.jpg)',
-            backgroundSize: 'auto 100%',
-            backgroundRepeat: 'repeat-x',
-            backgroundPosition: 'center'
-        }}
-      />
-      
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0, y: 10 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        transition={{ duration: 1.2, ease: "easeOut" }}
-        className="relative z-10"
-      >
-        <img 
-            src="https://storage.googleapis.com/uspeshnyy-projects/doc-mironova.ru/logo-gold.png" 
-            alt="Dr. Mironova" 
-            className="w-[240px] md:w-[320px] h-auto object-contain drop-shadow-sm" 
-        />
-      </motion.div>
-    </motion.div>
-  );
-};
-
-// --- App Root ---
-
-const App = () => {
-  const [loading, setLoading] = useState(true);
-  const [isBookingOpen, setIsBookingOpen] = useState(false);
-  const [language, setLanguageState] = useState<Language>('ru');
-  const [theme, setTheme] = useState<Theme>('light');
-  const [lenis, setLenis] = useState<any>(null);
-
-  useEffect(() => {
-      const lenisInstance = new Lenis({
-        duration: 1.2,
-        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-        orientation: 'vertical',
-        gestureOrientation: 'vertical',
-        smoothWheel: true,
-        wheelMultiplier: 1,
-        touchMultiplier: 2,
-      });
-  
-      setLenis(lenisInstance);
-  
-      function raf(time: number) {
-        lenisInstance.raf(time);
-        requestAnimationFrame(raf);
-      }
-  
-      requestAnimationFrame(raf);
-  
-      // Intercept anchor clicks
-      const handleAnchorClick = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const anchor = target.closest('a');
-        const href = anchor?.getAttribute('href');
-        
-        if (anchor && href?.startsWith('#') && href.length > 1) {
-          e.preventDefault();
-          try {
-              const element = document.querySelector(href);
-              if (element) {
-                  lenisInstance.scrollTo(element as HTMLElement);
-              }
-          } catch(e) {}
-        }
-      };
-  
-      document.addEventListener('click', handleAnchorClick);
-  
-      return () => {
-        lenisInstance.destroy();
-        document.removeEventListener('click', handleAnchorClick);
-      };
-  }, []);
-
-  // Load language from system
-  useEffect(() => {
-    if (typeof navigator !== 'undefined') {
-      const systemLang = navigator.language || (navigator as any).userLanguage;
-      if (systemLang && systemLang.startsWith('en')) {
-        setLanguageState('en');
-      }
-    }
-  }, []);
-
-  // Theme Logic
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  }, []);
-
-  const openBooking = useCallback(() => setIsBookingOpen(true), []);
-  const closeBooking = useCallback(() => setIsBookingOpen(false), []);
-
-  const contextValue = useMemo(() => ({
-    language,
-    setLanguage: setLanguageState,
-    t: TRANSLATIONS[language]
-  }), [language]);
-
-  // SEO Hook Integration
-  const SeoComponent = () => {
-      useScrollTitle();
-      return null;
-  };
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <LanguageContext.Provider value={contextValue}>
-        <SmoothScrollContext.Provider value={lenis}>
-            <SeoComponent />
-            <BookingContext.Provider value={{ isBookingOpen, openBooking, closeBooking }}>
-              <AnimatePresence>
-                 {loading && <Preloader onComplete={() => setLoading(false)} />}
-              </AnimatePresence>
-              
-              <div className={loading ? 'h-screen overflow-hidden' : ''}>
-                <CustomCursor />
-                <Navbar />
-                <main>
-                  <Hero />
-                  <Operations />
-                  <Portfolio />
-                  <PriceList />
-                  <About />
-                </main>
-                <Footer />
-                <BookingPanel />
-                <VoiceAssistant />
-              </div>
-            </BookingContext.Provider>
-        </SmoothScrollContext.Provider>
-      </LanguageContext.Provider>
-    </ThemeContext.Provider>
-  );
-};
-
-const root = createRoot(document.getElementById('root')!);
-root.render(<App />);
