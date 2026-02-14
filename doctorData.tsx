@@ -21,18 +21,12 @@ export const getDoctorAccordionItems = (t: TranslationType) => [
       title: t.doctor.sections.education,
       content: (
         <ul className="space-y-3 text-[#1A202C] dark:text-white">
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             ФГАОУ ВО РНИМУ им. Н. И. Пирогова Минздрава России (Москва)
-           </li>
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             ФГБОУ ДПО РМАНПО Минздрава России (Москва)
-           </li>
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             Villa Bella Clinic (Salò, Италия)
-           </li>
+           {t.doctor.content.educationList.map((item, i) => (
+             <li key={i} className="flex gap-2">
+               <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
+               {item}
+             </li>
+           ))}
         </ul>
       )
     },
@@ -41,18 +35,12 @@ export const getDoctorAccordionItems = (t: TranslationType) => [
       title: t.doctor.sections.publications,
       content: (
         <ul className="space-y-3 text-[#1A202C] dark:text-white">
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             14-ый международный конкурс учёных WIMC (Варшава 2018 г.)
-           </li>
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             24-ый международный конгресс EACMF (Мюнхен, 2018 г.)
-           </li>
-           <li className="flex gap-2">
-             <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
-             25-ый международный конгресс EACMF (Париж, 2020 г.)
-           </li>
+           {t.doctor.content.publicationsList.map((item, i) => (
+             <li key={i} className="flex gap-2">
+               <span className="w-1.5 h-1.5 rounded-full bg-[#CFB997] mt-2 flex-shrink-0" />
+               {item}
+             </li>
+           ))}
         </ul>
       )
     }

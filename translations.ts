@@ -3,7 +3,7 @@ export const TRANSLATIONS = {
     nav: {
       operations: "Операции",
       portfolio: "Портфолио",
-      prices: "Цены",
+      price: "Цены",
       about: "О докторе",
       contacts: "Контакты",
       book: "Записаться"
@@ -55,6 +55,16 @@ export const TRANSLATIONS = {
         practiceList: [
           "ФГБУ НМИЦ ЦНИИС и ЧЛХ Минздрава РФ, «ГКБ им. М.Е. Жадкевича», К31, «Медисанс»",
           "Опыт работы – 15 лет, более 300 операций ежегодно"
+        ],
+        educationList: [
+          "ФГАОУ ВО РНИМУ им. Н. И. Пирогова Минздрава России (Москва)",
+          "ФГБОУ ДПО РМАНПО Минздрава России (Москва)",
+          "Villa Bella Clinic (Salò, Италия)"
+        ],
+        publicationsList: [
+          "14-ый международный конкурс учёных WIMC (Варшава 2018 г.)",
+          "24-ый международный конгресс EACMF (Мюнхен, 2018 г.)",
+          "25-ый международный конгресс EACMF (Париж, 2020 г.)"
         ]
       }
     },
@@ -82,6 +92,10 @@ export const TRANSLATIONS = {
         why: "Почему выбирают меня?",
         cta: "Подарите себе уверенность в собственной красоте. Запишитесь на консультацию уже сегодня!",
         btn: "Рассчитать стоимость операции"
+      },
+      labels: {
+        direction: "Направление",
+        from: "Цены от:"
       }
     },
     portfolio: {
@@ -123,12 +137,12 @@ export const TRANSLATIONS = {
     footer: {
       brand_sub: "Sculpted Elegance",
       address: "Клиника эстетической медицины премиум-класса. Москва, Пресненская наб., 12",
-      menu: "Меню",
-      patients: "Пациентам",
-      contacts: "Контакты",
+      nav_title: "Навигация",
+      patients_title: "Пациентам",
+      contacts_title: "Контакты",
       work_hours: "Пн-Вс: 10:00 - 21:00",
-      callback: "Соглашения и оплата",
-      rights: "All rights reserved.",
+      legal_link: "Соглашения и оплата",
+      rights: "Elena Mironova. Все права защищены.",
       policy: "Политика конфиденциальности",
       offer: "Договор оферты",
       links: {
@@ -158,7 +172,7 @@ export const TRANSLATIONS = {
     nav: {
       operations: "Procedures",
       portfolio: "Portfolio",
-      prices: "Prices",
+      price: "Prices",
       about: "About Doctor",
       contacts: "Contacts",
       book: "Book Now"
@@ -171,7 +185,7 @@ export const TRANSLATIONS = {
       desc: "Creating perfect lines and forms inspired by your natural beauty. Author's plastic surgery by Elena Mironova.",
       cost: "Get a Quote",
       portfolio: "View Portfolio",
-      scroll: "Scroll"
+      scroll: "Scroll down"
     },
     booking: {
       title: "Fill the form",
@@ -210,6 +224,16 @@ export const TRANSLATIONS = {
         practiceList: [
           "FSBI NMIC CNIIS and Maxillofacial Surgery of the Ministry of Health of the Russian Federation, 'GKB named after M.E. Zhadkevich', K31, 'Medisans'",
           "Work experience – 15 years, over 300 operations annually"
+        ],
+        educationList: [
+          "Pirogov Russian National Research Medical University (Moscow)",
+          "Russian Medical Academy of Continuous Professional Education (Moscow)",
+          "Villa Bella Clinic (Salò, Italy)"
+        ],
+        publicationsList: [
+          "14th Warsaw International Medical Congress (Warsaw 2018)",
+          "24th Congress of the European Association for Cranio-Maxillo-Facial Surgery (Munich 2018)",
+          "25th Congress of the European Association for Cranio-Maxillo-Facial Surgery (Paris 2020)"
         ]
       }
     },
@@ -237,6 +261,10 @@ export const TRANSLATIONS = {
         why: "Why Choose Me?",
         cta: "Give yourself confidence in your own beauty. Sign up for a consultation today!",
         btn: "Calculate Procedure Cost"
+      },
+      labels: {
+        direction: "Specialization",
+        from: "Prices from:"
       }
     },
     portfolio: {
@@ -278,12 +306,12 @@ export const TRANSLATIONS = {
     footer: {
       brand_sub: "Sculpted Elegance",
       address: "Premium Aesthetic Medicine Clinic. Moscow, Presnenskaya nab., 12",
-      menu: "Menu",
-      patients: "For Patients",
-      contacts: "Contacts",
+      nav_title: "Navigation",
+      patients_title: "For Patients",
+      contacts_title: "Contacts",
       work_hours: "Mon-Sun: 10:00 - 21:00",
-      callback: "Agreements & Payment",
-      rights: "All rights reserved.",
+      legal_link: "Agreements & Payment",
+      rights: "Elena Mironova. All rights reserved.",
       policy: "Privacy Policy",
       offer: "Offer Agreement",
       links: {
